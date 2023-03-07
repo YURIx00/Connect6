@@ -1,2 +1,2 @@
 ### Connect6
-A pure monte carlo connect6 ai
+目前只是初级的模板，明天课设上抓紧完善！
