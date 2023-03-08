@@ -12,7 +12,7 @@
 #define PLAYER_1 1
 using namespace std;
 
-class Board {
+class Board {//kdy
 public:
 	void reset() {
 		memset(map, 0, sizeof map);
