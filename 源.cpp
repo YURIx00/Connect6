@@ -21,7 +21,7 @@ public:
 	int map[GRID_SIZE][GRID_SIZE];
 };
 
-class TreeNode {//
+class TreeNode {//zzk
 public:
 	TreeNode() {}
 
