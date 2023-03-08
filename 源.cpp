@@ -21,7 +21,7 @@ public:
 	int map[GRID_SIZE][GRID_SIZE];
 };
 
-class TreeNode {
+class TreeNode {//
 public:
 	TreeNode() {}
 
@@ -39,10 +39,10 @@ public:
 public:
 	int parent;
 	vector<int> children;
-	int n;  // ×ÜÄ£ÄâµÄ´ÎÊı
-	int xj; // winµÄ´ÎÊı
-	int nj; // ¸Ã½ÚµãÄ£ÄâµÄ´ÎÊı
-	int C;  // ²ÎÊıC
+	int n;  // æ€»æ¨¡æ‹Ÿçš„æ¬¡æ•°
+	int xj; // winçš„æ¬¡æ•°
+	int nj; // è¯¥èŠ‚ç‚¹æ¨¡æ‹Ÿçš„æ¬¡æ•°
+	int C;  // å‚æ•°C
 };
 
 class MCTS {
@@ -65,15 +65,15 @@ public:
 		cur_Board->reset();
 		cur_player = start_player;
 	}
-	// ºÏ·¨Âä×Ó
+	// åˆæ³•è½å­
 	bool legal_move(int move) {
 		int x = move / GRID_SIZE, y = move % GRID_SIZE;
 		if (x < 0 || y < 0 || x >= GRID_SIZE || y >= GRID_SIZE) return false;
 		if (cur_Board->map[x][y] != 0) return false;
 	}
-	// ÅĞ¶Ï¶Ô¾ÖÊÇ·ñ½áÊø
+	// åˆ¤æ–­å¯¹å±€æ˜¯å¦ç»“æŸ
 	int is_end() { // Return the winner of game
-		// ºáÅÅÁù×Ó
+		// æ¨ªæ’å…­å­
 		for (int i = 0; i < GRID_SIZE; i++) {
 			int count = 0;
 			int prev_color = 0;
@@ -92,7 +92,7 @@ public:
 			//cout << endl;
 		}
 
-		// ÊúÅÅÁù×Ó
+		// ç«–æ’å…­å­
 		for (int j = 0; j < GRID_SIZE; j++) {
 			int count = 0;
 			int prev_color = 0;
@@ -111,7 +111,7 @@ public:
 			//cout << endl;
 		}
 
-		// ÓÒĞ±Áù×ÓÉÏ ×óĞ±Áù×ÓÏÂ
+		// å³æ–œå…­å­ä¸Š å·¦æ–œå…­å­ä¸‹
 		for (int layer = 0; layer < GRID_SIZE; layer++) {
 			int count = 0;
 			int prev_color = 0;
@@ -143,7 +143,7 @@ public:
 			//cout << endl;
 		}
 		 
-		//ÓÒĞ±Áù×ÓÏÂ ×óĞ±Áù×ÓÉÏ
+		//å³æ–œå…­å­ä¸‹ å·¦æ–œå…­å­ä¸Š
 		for (int layer = 1; layer < GRID_SIZE; layer++) {
 			int count = 0;
 			int prev_color = 0;
@@ -177,33 +177,33 @@ public:
 
 		return GRID_BLANK;
 	}
-	// ¸ù¾İÒ»²½ÆåÅĞ¶Ï¶Ô¾ÖÊÇ·ñ½áÊø
+	// æ ¹æ®ä¸€æ­¥æ£‹åˆ¤æ–­å¯¹å±€æ˜¯å¦ç»“æŸ
 	int is_end(int x, int y) { // Return the winner of game (by last step)
 		int cur_color = cur_Board->map[x][y];
 		int count, i, j;
 
-		//ÊúÅÅÁù×Ó
+		//ç«–æ’å…­å­
 		i = x; count = -1;
 		while (i >= 0 && cur_Board->map[i][y] == cur_color) { i--; count++; }
 		i = x;
 		while (i < GRID_SIZE && cur_Board->map[i][y] == cur_color) { i++; count++; }
 		if (count >= N_TO_WIN) return cur_color;
 
-		//ºáÅÅÁù×Ó
+		//æ¨ªæ’å…­å­
 		j = y; count = -1;
 		while (j >= 0 && cur_Board->map[x][j] == cur_color) { j--; count++; }
 		j = y;
 		while (j <= GRID_SIZE && cur_Board->map[x][j] == cur_color) { j++; count++; }
 		if (count >= N_TO_WIN) return cur_color;
 
-		//ÓÒĞ±Áù×Ó
+		//å³æ–œå…­å­
 		i = x; j = y; count = -1;
 		while (i >= 0 && j < GRID_SIZE && cur_Board->map[i][j] == cur_color) { i--; j++; count++; }
 		i = x; j = y;
 		while (i < GRID_SIZE && j > 0 && cur_Board->map[i][j] == cur_color) { i++; j--; count++; }
 		if (count >= N_TO_WIN) return cur_color;
 
-		//×óĞ±Áù×Ó
+		//å·¦æ–œå…­å­
 		i = x; j = y; count = -1;
 		while (i >= 0 && j >= 0 && cur_Board->map[i][j] == cur_color) { i--; j--; count++; }
 		i = x; j = y; 
@@ -212,24 +212,24 @@ public:
 
 		return GRID_BLANK;
 	}
-	// move×ª»»location
+	// moveè½¬æ¢location
 	pair<int, int> move_to_location(int move) {
 		int x = move / GRID_SIZE;
 		int y = move % GRID_SIZE;
 		return { x, y };
 	}
-	// location×ª»»move
+	// locationè½¬æ¢move
 	int location_to_move(pair<int, int> location) {
 		int x = location.first;
 		int y = location.second;
 		return x * GRID_SIZE + y;
 	}
-	// ¸ü»»Ö´ÆåÕß
+	// æ›´æ¢æ‰§æ£‹è€…
 	void change_turn() {
 		chesses = 2;
 		cur_player = -cur_player;
 	}
-	// Âä×Ó
+	// è½å­
 	void make_move(int move) {
 		int x = move / GRID_SIZE, y = move % GRID_SIZE;
 
@@ -239,9 +239,9 @@ public:
 	}
 
 public:
-	Board* cur_Board; // ÆåÅÌ
-	int cur_player; // Ö´ÆåÕß 1 or -1
-	int chesses = 1; // Ê£ÓàÂä×ÓÊı
+	Board* cur_Board; // æ£‹ç›˜
+	int cur_player; // æ‰§æ£‹è€… 1 or -1
+	int chesses = 1; // å‰©ä½™è½å­æ•°
 };
 
 int main() {
