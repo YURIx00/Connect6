@@ -12,6 +12,7 @@
 #define GRID_SELF 1  // 己方为1
 #define GRID_OPPO -1 // 对方为-1
 #define N_TO_WIN 6
+#define INF 0x3f3f3f3f
 
 using namespace std;
 
@@ -23,13 +24,15 @@ public:
 	}
 
 	// 继承棋盘
-	Board(Board* _board) {
+	Board(Board* _board, set<int>* _legal_actions) {
 		reset();
 		for (int i = 0; i < GRID_SIZE; i++) {
 			for (int j = 0; j < GRID_SIZE; j++) {
-				_board->map[i][j] = map[i][j];
+				map[i][j] = _board->map[i][j];
 			}
 		}
+
+		legal_actions = _legal_actions;
 	}
 
 	// 棋盘初始化
@@ -83,7 +86,7 @@ public:
 	// 判断节点是否被下满
 	bool is_full_expand() {
 		set<int>* legal_actions = state->get_legal_actions();
-		return legal_actions->size() == 0;
+		return legal_actions->size() == 2 * (int)children.size();
 	}
 
 	// 判断节点是否叶节点
@@ -113,7 +116,7 @@ public:
 
 	// 继承游戏（用于模拟）
 	Game(Board* state, int color) {
-		cur_Board = new Board(state); // 棋盘继承
+		cur_Board = new Board(state, NULL); // 棋盘继承
 		cur_player = color; // 颜色继承
 		chesses = 2; // 余棋初始化为2
 	}
@@ -337,7 +340,7 @@ public:
 
 	// 从该节点选择最佳子节点
 	TreeNode* select(TreeNode* node) {
-		double max_ucb = 0; // 最大UCB
+		double max_ucb = -INF; // 最大UCB
 		vector<TreeNode*> select_children; // 最佳子节点的集合
 
 		for (auto child : node->children) {
@@ -363,7 +366,13 @@ public:
 
 	// 拓展选择的节点
 	TreeNode* expand(TreeNode* node) {
-		set<int>* legal_actions = node->state->get_legal_actions(); // 该节点的合法落子集合
+		set<int>* node_legal_actions = node->state->get_legal_actions(); // 该节点的合法落子集合
+
+		set<int>* legal_actions = new set<int>;
+		for (auto tmp : *node_legal_actions) {
+			legal_actions->insert(tmp);
+		}
+
 		if (legal_actions->empty()) { // 若无处落子
 			return node->parent; // 则返回父节点
 		}
@@ -380,15 +389,16 @@ public:
 		it = legal_actions->begin();
 		advance(it, rand() % legal_actions->size()); // 从余下的集合随机选择一步
 		int action_2 = *it;
-		legal_actions->insert(action_1); // 重建action_1
+		legal_actions->erase(action_2); // 重建action_1
 
 		//新节点的state
-		Board* new_state = new Board(node->state);
+		Board* new_state = new Board(node->state, legal_actions);
 		new_state->make_move(action_1, -node->color); // 选择的两步构成了新节点
 		new_state->make_move(action_2, -node->color);
 
 		//新节点
 		TreeNode* new_node = new TreeNode(node, new_state, -node->color, action_1, action_2);
+		node->children.push_back(new_node);
 		return new_node;
 	}
 
@@ -398,14 +408,15 @@ public:
 		int action = node->action_2; // 该节点的最后一步
 		set<int>* legal_actions = simulate_game->cur_Board->get_legal_actions(); // 拿到该节点的合法落子集合
 		set<int>::const_iterator it(legal_actions->begin()); // 集合指针（用于集合的随机选择）
-		while (game->is_end(simulate_game->cur_Board, action) || legal_actions->size() == 0) { // 若虚拟游戏已结束 or 该节点已无合法落子
+		while (game->is_end(simulate_game->cur_Board, action) == 0) { // 若虚拟游戏已结束 or 该节点已无合法落子
 			if (!legal_actions->empty()) { // 若仍能落子
 				it = legal_actions->begin();
-				advance(it, legal_actions->size()); // 随机选择一步
+				advance(it, rand() % legal_actions->size()); // 随机选择一步
 				action = *it;
 				legal_actions->erase(action); // 删去这一步
 				simulate_game->make_move(action); // 做出这一步
 			}
+			if (legal_actions->size() == 0) break;
 		}
 		int winner = game->is_end(simulate_game->cur_Board, action); // 获取赢家（若无赢家，返回0）
 		int reward = winner * 10; // 胜者为己方（10），对方（-10），和局（0）
