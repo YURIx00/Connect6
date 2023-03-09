@@ -9,7 +9,7 @@
 
 #define judge_black 0
 #define judge_white 1
-#define GRID_SIZE 8
+#define GRID_SIZE 15
 #define GRID_BLANK 0
 #define GRID_BLACK 1
 #define GRID_WHITE -1
