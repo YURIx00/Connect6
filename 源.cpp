@@ -4,6 +4,8 @@
 #include <random>
 #include <cstdlib>
 #include <ctime>
+#include <set>
+#include <algorithm>
 
 #define judge_black 0
 #define judge_white 1
@@ -23,16 +25,29 @@ public:
 		memset(map, 0, sizeof map);
 	}
 
-	vector<int> get_legal_actions() {
-		vector<int> legal_actions;
+	void make_move(int move, int color) {
+		int x = move / GRID_SIZE, y = move % GRID_SIZE;
+		map[x][y] = color;
+	}
+
+	set<int>* get_legal_actions() {
+		set<int>* legal_actions = new set<int>;
 
 		for (int i = 0; i < GRID_SIZE; i++) {
 			for (int j = 0; j < GRID_SIZE; j++) {
-				if (map[i][j] == 0) legal_actions.push_back(i * GRID_SIZE + j);
+				if (map[i][j] == 0) legal_actions->insert(i * GRID_SIZE + j);
 			}
 		}
 
 		return legal_actions;
+	}
+
+	void operator = (Board* _board) {
+		for (int i = 0; i < GRID_SIZE; i++) {
+			for (int j = 0; j < GRID_SIZE; j++) {
+				_board->map[i][j] = map[i][j];
+			}
+		}
 	}
 public:
 	int map[GRID_SIZE][GRID_SIZE];
@@ -40,13 +55,21 @@ public:
 
 class TreeNode {
 public:
-	TreeNode(int color) {}
+	TreeNode(TreeNode* _parent = NULL, Board* _state, int _color) {
+		parent = _parent;
+		children.resize(0);
+		state = _state;
+		color = _color;
+	}
 
-	bool is_full_expand() {}
+	bool is_full_expand() {
+		set<int>* legal_actions = state->get_legal_actions();
+		return legal_actions->size() == 0;
+	}
 
 	bool is_leaf() { return children.size() == 0; }
 
-	bool is_root() { return parent == -1; }
+	bool is_root() { return parent == NULL; }
 public:
 	TreeNode* parent;
 	vector<TreeNode*> children;
@@ -54,7 +77,7 @@ public:
 	int color;
 	int reward;
 	double visits;
-	int action;
+	int action_1, action_2;
 };
 
 class AIPlayer {
@@ -66,12 +89,16 @@ public:
 		c = 2;
 	}
 
-	int mcts() {
+	pair<int, int> mcts() {
 		int reward;
 		TreeNode* leave_node, *best_child;
 		for (int t = 0; t < max_times; t++) {
 			leave_node = select_expand_node(root);
+			reward = simulate(leave_node);
+			back_propagate(leave_node, reward);
+			best_child = select(root);
 		}
+		return { best_child->action_1, best_child->action_2 };
 	}
 
 	TreeNode* select_expand_node(TreeNode* node) {
@@ -111,17 +138,61 @@ public:
 	}
 
 	TreeNode* expand(TreeNode* node) {
-		vector<int> legal_actions = node->state->get_legal_actions();
-		int n = legal_actions.size();
-		if (n == 0) {
+		set<int>* legal_actions = node->state->get_legal_actions();
+		if (legal_actions->empty()) {
 			return node->parent;
 		}
 
-		int action = legal_actions[rand() % n];
-		vector<int> tride_action;
+		//新节点的action
+		for (auto child : node->children) {
+			legal_actions->erase(child->action_1);
+			legal_actions->erase(child->action_2);
+		}
+		set<int>::const_iterator it(legal_actions->begin());
+		advance(it, rand() % legal_actions->size());
+		int action_1 = *it;
+		legal_actions->erase(action_1);
+		it = legal_actions->begin();
+		advance(it, rand() % legal_actions->size());
+		int action_2 = *it;
 
+		//新节点的state
+		Board* new_state = new Board(node->state);
+		new_state->make_move(action_1);
+		new_state->make_move(action_2);
+
+		TreeNode* new_node = new TreeNode(node, new_state, -node->color);
+		return new_node;
 	}
 
+	int simulate(TreeNode* node) {
+		Game* simulate_game = new Game(node->state, -node->color);
+		int color = -node->color;
+		int action = node->action_2;
+		set<int>* legal_actions = simulate_game->cur_Board->get_legal_actions();
+		set<int>::const_iterator it(legal_actions->begin());
+		while (game->is_end(simulate_board, action) || legal_actions->size() == 0) {
+			if (!legal_actions->empty()) {
+				it = legal_actions->begin();
+				advance(it, legal_actions->size());
+				action = *it;
+				legal_actions->erase(action);
+				simulate_game->make_move(action);
+				count++;
+			}
+		}
+		int winner = game->is_end(simulate_board, action);
+		int reward = winner * 10;
+		return reward;
+	}
+
+	void back_propagate(TreeNode* node, int reward) {
+		while (node != NULL) {
+			node->visits++;
+			node->reward += reward;
+			node = node->parent;
+		}
+	}
 public:
 	Game* game;
 	TreeNode* root;
@@ -139,6 +210,12 @@ public:
 		cur_player = start_player;
 		chesses = 1;
 		last_blank = GRID_SIZE * GRID_SIZE;
+	}
+
+	Game(Board* state, int color) {
+		cur_Board = state;
+		cur_player = color;
+		chesses = 2;
 	}
 
 	// 合法落子
@@ -256,53 +333,46 @@ public:
 	}
 
 	// 根据一步棋判断对局是否结束
-	int is_end(int x, int y) { // Return the winner of game (by last step)
-		int cur_color = cur_Board->map[x][y];
+	int is_end(Board* state, int move) { // Return the winner of game (by last step)
+		int x = move / GRID_SIZE, y = move % GRID_SIZE;
+		int cur_color = state->map[x][y];
 		int count, i, j;
 
 		//竖排六子
 		i = x; count = -1;
-		while (i >= 0 && cur_Board->map[i][y] == cur_color) { i--; count++; }
+		while (i >= 0 && state->map[i][y] == cur_color) { i--; count++; }
 		i = x;
-		while (i < GRID_SIZE && cur_Board->map[i][y] == cur_color) { i++; count++; }
+		while (i < GRID_SIZE && state->map[i][y] == cur_color) { i++; count++; }
 		if (count >= N_TO_WIN) return cur_color;
 
 		//横排六子
 		j = y; count = -1;
-		while (j >= 0 && cur_Board->map[x][j] == cur_color) { j--; count++; }
+		while (j >= 0 && state->map[x][j] == cur_color) { j--; count++; }
 		j = y;
-		while (j <= GRID_SIZE && cur_Board->map[x][j] == cur_color) { j++; count++; }
+		while (j <= GRID_SIZE && state->map[x][j] == cur_color) { j++; count++; }
 		if (count >= N_TO_WIN) return cur_color;
 
 		//右斜六子
 		i = x; j = y; count = -1;
-		while (i >= 0 && j < GRID_SIZE && cur_Board->map[i][j] == cur_color) { i--; j++; count++; }
+		while (i >= 0 && j < GRID_SIZE && state->map[i][j] == cur_color) { i--; j++; count++; }
 		i = x; j = y;
-		while (i < GRID_SIZE && j > 0 && cur_Board->map[i][j] == cur_color) { i++; j--; count++; }
+		while (i < GRID_SIZE && j > 0 && state->map[i][j] == cur_color) { i++; j--; count++; }
 		if (count >= N_TO_WIN) return cur_color;
 
 		//左斜六子
 		i = x; j = y; count = -1;
-		while (i >= 0 && j >= 0 && cur_Board->map[i][j] == cur_color) { i--; j--; count++; }
+		while (i >= 0 && j >= 0 && state->map[i][j] == cur_color) { i--; j--; count++; }
 		i = x; j = y;
-		while (i < GRID_SIZE && j < GRID_SIZE && cur_Board->map[i][j] == cur_color) { i++; j++; count++; }
+		while (i < GRID_SIZE && j < GRID_SIZE && state->map[i][j] == cur_color) { i++; j++; count++; }
 		if (count >= N_TO_WIN) return cur_color;
 
 		return GRID_BLANK;
 	}
 
-	// move转换location
-	pair<int, int> move_to_location(int move) {
-		int x = move / GRID_SIZE;
-		int y = move % GRID_SIZE;
-		return { x, y };
-	}
-
-	// location转换move
-	int location_to_move(pair<int, int> location) {
-		int x = location.first;
-		int y = location.second;
-		return x * GRID_SIZE + y;
+	void make_move(int move) {
+		cur_Board->make_move(move, cur_player);
+		chesses--;
+		if (chesses == 0) change_turn();
 	}
 
 	// 更换执棋者
@@ -311,34 +381,8 @@ public:
 		cur_player = -cur_player;
 	}
 
-	// 落子
-	void make_move(int move) {
-		int x = move / GRID_SIZE, y = move % GRID_SIZE;
-
-		cur_Board->map[x][y] = cur_player;
-		chesses--;
-		if (chesses == 0) change_turn();
-	}
-	void make_move(int x, int y) {
-		cur_Board->map[x][y] = cur_player;
-		chesses--;
-		if (chesses == 0) change_turn();
-	}
-
-	// 随机输出
-	int rand_move() {
-		if (last_blank == 0) return -1;
-		int move = rand() % (GRID_SIZE * GRID_SIZE);
-		int x = move / GRID_SIZE, y = move % GRID_SIZE;
-		while (cur_Board->map[x][y] != 0) {
-			move = rand() % (GRID_SIZE * GRID_SIZE);
-			x = move / GRID_SIZE, y = move % GRID_SIZE;
-		}
-
-		return move;
-	}
 public:
-	Board* cur_Board; // 棋盘
+	Board* cur_Board;
 	int cur_player; // 执棋者 1 or -1
 	int chesses; // 剩余落子数
 	int last_blank;
@@ -386,18 +430,12 @@ int main()
 	/************************************************************************************/
 	/***在下面填充你的代码，决策结果（本方将落子的位置）存入startX、startY、resultX、resultY中*****/
 	//下面仅为随机策略的示例代码，且效率低，可删除
-	int startX, startY, resultX, resultY;
-
-	int start = main_game->rand_move();
-	main_game->make_move(start);
-	startX = start / GRID_SIZE, startY = start % GRID_SIZE;
-
-	int result = main_game->rand_move();
-	main_game->make_move(result);
-	resultX = result / GRID_SIZE, resultY = result % GRID_SIZE;
+	AIPlayer* AI = new AIPlayer(main_game);
+	pair<int, int> pair_actions = AI->mcts();
+	int action_1 = pair_actions.first, action_2 = pair_actions.second;
+	int startX = action_1 / GRID_SIZE, startY = action_1 % GRID_SIZE, resultX = action_2 / GRID_SIZE, resultY = action_2 % GRID_SIZE;
 	/****在上方填充你的代码，决策结果（本方将落子的位置）存入startX、startY、resultX、resultY中****/
 	/************************************************************************************/
-
 
 	// 决策结束，向平台输出决策结果
 	cout << startX << ' ' << startY << ' ' << resultX << ' ' << resultY << endl;
