@@ -21,6 +21,18 @@ using namespace std;
 
 class Board {
 public:
+	Board() {
+		reset();
+	}
+
+	Board(Board* _board) {
+		for (int i = 0; i < GRID_SIZE; i++) {
+			for (int j = 0; j < GRID_SIZE; j++) {
+				_board->map[i][j] = map[i][j];
+			}
+		}
+	}
+
 	void reset() {
 		memset(map, 0, sizeof map);
 	}
@@ -55,7 +67,7 @@ public:
 
 class TreeNode {
 public:
-	TreeNode(TreeNode* _parent = NULL, Board* _state, int _color) {
+	TreeNode(TreeNode* _parent, Board* _state, int _color) {
 		parent = _parent;
 		children.resize(0);
 		state = _state;
@@ -76,138 +88,15 @@ public:
 	Board* state;
 	int color;
 	int reward;
-	double visits;
+	int visits;
 	int action_1, action_2;
-};
-
-class AIPlayer {
-public:
-	AIPlayer(Board* _Board, int color) {
-		cur_Board = _Board;
-		root = new TreeNode(color);
-		max_times = 200;
-		c = 2;
-	}
-
-	pair<int, int> mcts() {
-		int reward;
-		TreeNode* leave_node, *best_child;
-		for (int t = 0; t < max_times; t++) {
-			leave_node = select_expand_node(root);
-			reward = simulate(leave_node);
-			back_propagate(leave_node, reward);
-			best_child = select(root);
-		}
-		return { best_child->action_1, best_child->action_2 };
-	}
-
-	TreeNode* select_expand_node(TreeNode* node) {
-		while (game->is_end(node->state) {
-			if (node->children.size() == 0 || !node->is_full_expand()) {
-				return expand(node);
-			}
-			else {
-				node = select(node);
-			}
-		}
-	}
-
-	TreeNode* select(TreeNode* node) {
-		double max_ucb = 0;
-		vector<TreeNode*> select_children;
-
-		for (auto child : node->children) {
-			if (child->visits == 0) {
-				return child;
-			}
-
-			double ucb = (double)child->reward / (double)child->visits + c * sqrt(2.0 * log((double)node->visits) / (double)child->visit);
-			if (ucb == max_ucb) {
-				select_children.push_back(child);
-			}
-			else if(ucb > max_ucb) {
-				select_children = { child };
-				max_ucb = ucb;
-			}
-		}
-
-		int n = select_children.size();
-		if (n == 0) return node->parent;
-
-		return select_children[rand() % n];
-	}
-
-	TreeNode* expand(TreeNode* node) {
-		set<int>* legal_actions = node->state->get_legal_actions();
-		if (legal_actions->empty()) {
-			return node->parent;
-		}
-
-		//新节点的action
-		for (auto child : node->children) {
-			legal_actions->erase(child->action_1);
-			legal_actions->erase(child->action_2);
-		}
-		set<int>::const_iterator it(legal_actions->begin());
-		advance(it, rand() % legal_actions->size());
-		int action_1 = *it;
-		legal_actions->erase(action_1);
-		it = legal_actions->begin();
-		advance(it, rand() % legal_actions->size());
-		int action_2 = *it;
-
-		//新节点的state
-		Board* new_state = new Board(node->state);
-		new_state->make_move(action_1);
-		new_state->make_move(action_2);
-
-		TreeNode* new_node = new TreeNode(node, new_state, -node->color);
-		return new_node;
-	}
-
-	int simulate(TreeNode* node) {
-		Game* simulate_game = new Game(node->state, -node->color);
-		int color = -node->color;
-		int action = node->action_2;
-		set<int>* legal_actions = simulate_game->cur_Board->get_legal_actions();
-		set<int>::const_iterator it(legal_actions->begin());
-		while (game->is_end(simulate_board, action) || legal_actions->size() == 0) {
-			if (!legal_actions->empty()) {
-				it = legal_actions->begin();
-				advance(it, legal_actions->size());
-				action = *it;
-				legal_actions->erase(action);
-				simulate_game->make_move(action);
-				count++;
-			}
-		}
-		int winner = game->is_end(simulate_board, action);
-		int reward = winner * 10;
-		return reward;
-	}
-
-	void back_propagate(TreeNode* node, int reward) {
-		while (node != NULL) {
-			node->visits++;
-			node->reward += reward;
-			node = node->parent;
-		}
-	}
-public:
-	Game* game;
-	TreeNode* root;
-	int max_times; // 最大迭代次数
-	int player_color; // 玩家颜色
-	double c; // UCB超参数
 };
 
 class Game {
 public:
-	Game(int start_player = 0) {
-		// Initialize the chess board
+	Game() {
 		cur_Board = new Board;
 		cur_Board->reset();
-		cur_player = start_player;
 		chesses = 1;
 		last_blank = GRID_SIZE * GRID_SIZE;
 	}
@@ -375,6 +264,13 @@ public:
 		if (chesses == 0) change_turn();
 	}
 
+	void make_move(int x, int y) {
+		int move = x * GRID_SIZE + y;
+		cur_Board->make_move(move, cur_player);
+		chesses--;
+		if (chesses == 0) change_turn();
+	}
+
 	// 更换执棋者
 	void change_turn() {
 		chesses = 2;
@@ -388,23 +284,136 @@ public:
 	int last_blank;
 };
 
-// 判断是否在棋盘内
-inline bool inMap(int x, int y)
-{
-	if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE)
-		return false;
-	return true;
-}
+
+class AIPlayer {
+public:
+	AIPlayer(Game* _game) {
+		game = _game;
+		root = new TreeNode(NULL, _game->cur_Board, _game->cur_player);
+		max_times = 200;
+		c = 2;
+	}
+
+	pair<int, int> mcts() {
+		int reward;
+		TreeNode* leave_node, * best_child = root;
+		for (int t = 0; t < max_times; t++) {
+			leave_node = select_expand_node(root);
+			reward = simulate(leave_node);
+			back_propagate(leave_node, reward);
+			best_child = select(root);
+		}
+		return { best_child->action_1, best_child->action_2 };
+	}
+
+	TreeNode* select_expand_node(TreeNode* node) {
+		while (game->is_end(node->state)) {
+			if (node->children.size() == 0 || !node->is_full_expand()) {
+				return expand(node);
+			}
+			else {
+				node = select(node);
+			}
+		}
+	}
+
+	TreeNode* select(TreeNode* node) {
+		double max_ucb = 0;
+		vector<TreeNode*> select_children;
+
+		for (auto child : node->children) {
+			if (child->visits == 0) {
+				return child;
+			}
+
+			double ucb = (double)child->reward / (double)child->visits + c * sqrt(2.0 * log((double)node->visits) / (double)child->visits);
+			if (ucb == max_ucb) {
+				select_children.push_back(child);
+			}
+			else if (ucb > max_ucb) {
+				select_children = { child };
+				max_ucb = ucb;
+			}
+		}
+
+		int n = (int)select_children.size();
+		if (n == 0) return node->parent;
+
+		return select_children[rand() % n];
+	}
+
+	TreeNode* expand(TreeNode* node) {
+		set<int>* legal_actions = node->state->get_legal_actions();
+		if (legal_actions->empty()) {
+			return node->parent;
+		}
+
+		//新节点的action
+		for (auto child : node->children) {
+			legal_actions->erase(child->action_1);
+			legal_actions->erase(child->action_2);
+		}
+		set<int>::const_iterator it(legal_actions->begin());
+		advance(it, rand() % legal_actions->size());
+		int action_1 = *it;
+		legal_actions->erase(action_1);
+		it = legal_actions->begin();
+		advance(it, rand() % legal_actions->size());
+		int action_2 = *it;
+
+		//新节点的state
+		Board* new_state = new Board(node->state);
+		new_state->make_move(action_1, -node->color);
+		new_state->make_move(action_2, -node->color);
+
+		TreeNode* new_node = new TreeNode(node, new_state, -node->color);
+		return new_node;
+	}
+
+	int simulate(TreeNode* node) {
+		Game* simulate_game = new Game(node->state, -node->color);
+		int color = -node->color;
+		int action = node->action_2;
+		set<int>* legal_actions = simulate_game->cur_Board->get_legal_actions();
+		set<int>::const_iterator it(legal_actions->begin());
+		while (game->is_end(simulate_game->cur_Board, action) || legal_actions->size() == 0) {
+			if (!legal_actions->empty()) {
+				it = legal_actions->begin();
+				advance(it, legal_actions->size());
+				action = *it;
+				legal_actions->erase(action);
+				simulate_game->make_move(action);
+			}
+		}
+		int winner = game->is_end(simulate_game->cur_Board, action);
+		int reward = winner * 10;
+		return reward;
+	}
+
+	void back_propagate(TreeNode* node, int reward) {
+		while (node != NULL) {
+			node->visits++;
+			node->reward += reward;
+			node = node->parent;
+		}
+	}
+public:
+	Game* game;
+	TreeNode* root;
+	int max_times; // 最大迭代次数
+	int player_color; // 玩家颜色
+	double c; // UCB超参数
+};
 
 int main()
 {
-	Game* main_game;
+	Game* main_game = new Game();
 	int x0, y0, x1, y1;
 
 	// 分析自己收到的输入和自己过往的输出，并恢复棋盘状态
 	int turnID;
 	cin >> turnID;
-	main_game.cur_player = GRID_WHITE; // 先假设自己是白方
+	main_game->cur_player = GRID_WHITE; // 先假设自己是白方
 	for (int i = 0; i < turnID; i++) {
 		// 根据这些输入输出逐渐恢复状态到当前回合
 		cin >> x0 >> y0 >> x1 >> y1;
