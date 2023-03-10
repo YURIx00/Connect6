@@ -391,6 +391,11 @@ public:
 		int action_2 = *it;
 		legal_actions->erase(action_2); // 重建action_1
 
+		for (auto child : node->children) {
+			legal_actions->insert(child->action_1);
+			legal_actions->insert(child->action_2);
+		}
+
 		//新节点的state
 		Board* new_state = new Board(node->state, legal_actions);
 		new_state->make_move(action_1, -node->color); // 选择的两步构成了新节点
@@ -476,6 +481,19 @@ int main()
 
 	if (turnID == 1) {
 		cout << GRID_SIZE / 2 << ' ' << GRID_SIZE / 2 << ' ' << -1 << ' ' << -1 << endl;
+		return 0;
+	}
+
+	set<int>* main_legal_actions = main_game->cur_Board->get_legal_actions();
+	if(main_legal_actions->size() == 2) {
+		int action_1 = *main_legal_actions->begin();
+		int action_2 = *main_legal_actions->end();
+		cout << action_1 / GRID_SIZE << ' ' << action_1 % GRID_SIZE << ' ' << action_2 / GRID_SIZE << ' ' << action_2 % GRID_SIZE << endl;
+		return 0;
+	}
+	if (main_legal_actions->size() == 1) {
+		int action_1 = *main_legal_actions->begin();
+		cout << action_1 / GRID_SIZE << ' ' << action_1 % GRID_SIZE << ' ' << -1 << ' ' << -1 << endl;
 		return 0;
 	}
 	/************************************************************************************/
