@@ -86,7 +86,7 @@ public:
 	// 判断节点是否被下满
 	bool is_full_expand() {
 		set<int>* legal_actions = state->get_legal_actions();
-		return legal_actions->size() == 2 * (int)children.size();
+		return (int)legal_actions->size() == 2 * (int)children.size();
 	}
 
 	// 判断节点是否叶节点
@@ -444,7 +444,7 @@ int main()
 {
 	Game* main_game = new Game();
 	int x0, y0, x1, y1;
-	int last_action_1, last_action_2; // 记录最后两步（用于创建蒙特拉洛树根）
+	int last_action_1 = -1, last_action_2 = -1; // 记录最后两步（用于创建蒙特拉洛树根）
 	// 分析自己收到的输入和自己过往的输出，并恢复棋盘状态
 	int turnID;
 	cin >> turnID;
@@ -474,6 +474,10 @@ int main()
 		}
 	}
 
+	if (turnID == 1) {
+		cout << GRID_SIZE / 2 << ' ' << GRID_SIZE / 2 << ' ' << -1 << ' ' << -1 << endl;
+		return 0;
+	}
 	/************************************************************************************/
 	/***在下面填充你的代码，决策结果（本方将落子的位置）存入startX、startY、resultX、resultY中*****/
 	//下面仅为随机策略的示例代码，且效率低，可删除
