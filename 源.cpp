@@ -447,6 +447,7 @@ public:
 
 int main()
 {
+	srand(time(0));//提供随机数种子
 	Game* main_game = new Game();
 	int x0, y0, x1, y1;
 	int last_action_1 = -1, last_action_2 = -1; // 记录最后两步（用于创建蒙特拉洛树根）
