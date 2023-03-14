@@ -11,7 +11,6 @@
 #define GRID_BLANK 0
 #define GRID_SELF 1	 // 己方为1
 #define GRID_OPPO -1 // 对方为-1
-#define DISTANCE 2 //选择棋子周围距离为DISTANCE的格子模拟
 #define N_TO_WIN 6
 #define INF 0x3f3f3f3f
 
@@ -35,7 +34,6 @@ public:
 			for (int j = 0; j < GRID_SIZE; j++)
 			{
 				map[i][j] = _board->map[i][j];
-				surround_mark[i][j]=_board->surround_mark[i][j];
 			}
 		}
 
@@ -50,7 +48,6 @@ public:
 			for (int j = 0; j < GRID_SIZE; j++)
 			{
 				map[i][j] = 0;
-				surround_mark[i][j] = 0;
 			}
 		}
 	}
@@ -60,21 +57,8 @@ public:
 	{
 		int x = move / GRID_SIZE, y = move % GRID_SIZE;
 		map[x][y] = color;
-		change_mark(x, y);
 	}
-	// 标记周围待拓展的棋格，注意会将有落子的棋格也标记
-	void change_mark(int x, int y)
-	{ 
-		for (int i = -DISTANCE; i <= DISTANCE; i++)
-		{
-			for (int j = -DISTANCE; j <= DISTANCE; j++)
-			{
-				int xx = x + i, yy = y + j;
-				if (xx >= 0 && xx < GRID_SIZE && yy >= 0 && yy < GRID_SIZE)
-					surround_mark[xx][yy] = 1;
-			}
-		}
-	}
+
 	// 获取该棋盘的合法落子集合
 	set<int> *get_legal_actions()
 	{
@@ -86,7 +70,7 @@ public:
 		{
 			for (int j = 0; j < GRID_SIZE; j++)
 			{
-				if (map[i][j] == 0 && 1 == surround_mark[i][j])
+				if (map[i][j] == 0)
 					legal_actions->insert(i * GRID_SIZE + j);
 			}
 		}
@@ -96,8 +80,7 @@ public:
 
 public:
 	int map[GRID_SIZE][GRID_SIZE]; // 15 * 15的棋盘
-	int surround_mark[GRID_SIZE][GRID_SIZE];//用于标记当前棋子周围棋格,后面选择这些棋格模拟
-	set<int> *legal_actions; // 合法落子的集合
+	set<int> *legal_actions;	   // 合法落子的集合
 };
 
 class TreeNode
@@ -503,7 +486,7 @@ public:
 		return select_children[rand() % n]; // 从最佳子节点集合随机选择一个
 	}
 
-	// 拓展选择的节点
+	// 拓展选择的节点，返回一个可行的且未拓展过的子节点
 	TreeNode *expand(TreeNode *node)
 	{
 		set<int> *node_legal_actions = node->state->get_legal_actions(); // 该节点的合法落子集合
@@ -511,7 +494,7 @@ public:
 		set<int> *legal_actions = new set<int>;
 		for (auto tmp : *node_legal_actions)
 		{
-			legal_actions->insert(tmp);
+			legal_actions->insert(tmp); // tmp为int i*GRID_SIZE+j
 		}
 
 		if (legal_actions->empty())
@@ -520,6 +503,7 @@ public:
 		}
 
 		// 排除子节点的落子
+		// why要先删除再重建，避免重复
 		for (auto child : node->children)
 		{
 			legal_actions->erase(child->action_1);
@@ -535,7 +519,7 @@ public:
 		legal_actions->erase(action_2); // 重建action_1
 
 		for (auto child : node->children)
-		{
+		{ // 恢复
 			legal_actions->insert(child->action_1);
 			legal_actions->insert(child->action_2);
 		}
@@ -551,7 +535,7 @@ public:
 		return new_node;
 	}
 
-	// 从该节点模拟结果
+	// 从该节点进行随机模拟，结果
 	int simulate(TreeNode *node)
 	{
 		Game *simulate_game = new Game(node->state, -node->color);				 // 虚拟游戏初始化
@@ -597,14 +581,14 @@ public:
 
 int main()
 {
-	srand(time(0)); // 提供随机数种子
 	Game *main_game = new Game();
 	int x0, y0, x1, y1;
 	int last_action_1 = -1, last_action_2 = -1; // 记录最后两步（用于创建蒙特拉洛树根）
 	// 分析自己收到的输入和自己过往的输出，并恢复棋盘状态
 	int turnID;
+	bool firstself = false;
 	cin >> turnID;
-	main_game->cur_player = GRID_SELF; // 不在乎执白还是执黑，己方的颜色为1
+	main_game->cur_player = GRID_OPPO; // 不在乎执白还是执黑，己方的颜色为1
 	for (int i = 0; i < turnID; i++)
 	{
 		// 根据这些输入输出逐渐恢复状态到当前回合
@@ -614,6 +598,8 @@ int main()
 		if (x0 == -1)
 		{
 			// 第一回合收到坐标是-1, -1，说明我是黑方（第一回合落一子的角色）
+			main_game->cur_player = GRID_SELF;
+			firstself = true;
 			main_game->make_move(x0, y0);
 			main_game->make_move(x1, y1);
 		}
@@ -635,7 +621,7 @@ int main()
 		}
 	}
 
-	if (turnID == 1)
+	if (turnID == 1 && 1 == firstself)
 	{
 		cout << GRID_SIZE / 2 << ' ' << GRID_SIZE / 2 << ' ' << -1 << ' ' << -1 << endl;
 		return 0;
