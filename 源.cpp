@@ -11,12 +11,13 @@
 #define GRID_BLANK 0
 #define GRID_SELF 1     // 己方为1
 #define GRID_OPPO -1    // 对方为-1
-#define DISTANCE 2      // 周围的距离
+#define DISTANCE 1      // 周围的距离
 #define SURROUND_MARK 2 // 用于标记棋子周围的棋格
 #define N_TO_WIN 6
 #define INF 0x3f3f3f3f
 
 using namespace std;
+const int mov[8][2] = { {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, -1} };
 
 class Board
 {
@@ -61,6 +62,7 @@ public:
         map[x][y] = color;
         change_mark(x, y);
     }
+
     // 标记周围待拓展的棋格
     void change_mark(int x, int y)
     {
@@ -525,7 +527,7 @@ public:
             legal_actions->erase(child->action_1);
             legal_actions->erase(child->action_2);
         }
-        if(legal_actions->size()<2)return  node->parent;  //若除去兄弟后无可拓展节点，  这个应该是因为判断节点是否拓展完时将拓展完毕的判为可拓展所致
+        if (legal_actions->size() < 2)return  node->parent;  //若除去兄弟后无可拓展节点，  这个应该是因为判断节点是否拓展完时将拓展完毕的判为可拓展所致
         set<int>::const_iterator it(legal_actions->begin()); // 集合指针it
         advance(it, rand() % legal_actions->size());         // 从余下的集合随机选择一步
         int action_1 = *it;
@@ -559,21 +561,25 @@ public:
         int action = node->action_2;                                             // 该节点的最后一步
         set<int>* legal_actions = simulate_game->cur_Board->get_legal_actions(); // 拿到该节点的合法落子集合
         set<int>::const_iterator it(legal_actions->begin());                     // 集合指针（用于集合的随机选择）
-        while (game->is_end(simulate_game->cur_Board, action) == 0)
-        { // 若虚拟游戏已结束 or 该节点已无合法落子
-            if (!legal_actions->empty())
-            { // 若仍能落子
-                it = legal_actions->begin();
-                advance(it, rand() % legal_actions->size()); // 随机选择一步
-                action = *it;
-                legal_actions->erase(action);     // 删去这一步
-                simulate_game->make_move(action); // 做出这一步
+        while (!legal_actions->empty()) // 该节点已无合法落子
+        {
+            it = legal_actions->begin();
+            advance(it, rand() % legal_actions->size()); // 随机选择一步
+            action = *it;
+            legal_actions->erase(action);                // 删去这一步
+            simulate_game->make_move(action);            // 做出这一步
+            int x = action / GRID_SIZE, y = action % GRID_SIZE;
+            for (int i = 0; i < 8; i++)
+            {
+                int tx = x + mov[i][0], ty = y + mov[i][1];
+                if (tx < 0 || tx >= GRID_SIZE || ty < 0 || ty >= GRID_SIZE)
+                    continue;
+                if (simulate_game->cur_Board->map[tx][ty] == 2)
+                    legal_actions->insert(tx * GRID_SIZE + ty);
             }
-            if (legal_actions->size() == 0)
-                break;
         }
         int winner = game->is_end(simulate_game->cur_Board, action); // 获取赢家（若无赢家，返回0）
-        int reward = winner * 10;                                    // 胜者为己方（10），对方（-10），和局（0）
+        int reward = winner;                                    // 胜者为己方（1），对方（-1），和局（0）
         return reward;                                               // 返回奖励点
     }
 
