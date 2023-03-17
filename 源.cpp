@@ -7,18 +7,19 @@
 #include <set>
 #include <algorithm>
 
-#define GRID_SIZE 15        // 棋盘的规格
-#define GRID_BLANK 0        // 空白
-#define GRID_SELF 1         // 己方为1
-#define GRID_OPPO -1        // 对方为-1
-#define DISTANCE 1          // 周围的距离
-#define SURROUND_MARK 2     // 用于标记棋子周围的棋格
-#define N_TO_WIN 6          // 需要连续几子才能胜利
+#define GRID_SIZE 15            // 棋盘的规格
+#define GRID_BLANK 0            // 空白
+#define GRID_SELF 1             // 己方为1
+#define GRID_OPPO -1            // 对方为-1
+#define DISTANCE 1              // 周围的距离
+#define SURROUND_MARK 2         // 用于标记棋子周围的棋格
+#define N_TO_WIN 6              // 需要连续几子才能胜利
+#define TIME_TO_SIMULATE 1000   // 用于模拟的毫秒时间
 #define INF 0x3f3f3f3f
 
 using namespace std;
 const int mov[8][2] = { {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, -1} };
-                       //  零 一  二 三      四     五      六
+// 零 一  二  三     四     五      六
 const int SelfValue[7] = { 1, 10, 50, 1000,  9999,  11111,  1000000 };
 const int OppoValue[7] = { 1, 10, 50, 10000, 12222, 222222, 1000000 };
 
@@ -112,13 +113,13 @@ public:
 public:
 
     //判断格子是否在棋盘中
-    bool is_inGrid(int ex, int ey)const 
+    bool is_inGrid(int ex, int ey)const
     {
         return (ex >= 0 && ey >= 0 && ex < GRID_SIZE&& ey < GRID_SIZE);
     }
 
     //判断该路是否存在
-    bool is_legalRoad() const 
+    bool is_legalRoad() const
     {
         int max_dist = N_TO_WIN;
         if (!is_inGrid(road_x, road_y) || !is_inGrid(road_x + (max_dist - 1) * mov[direction][0], road_y + (max_dist - 1) * mov[direction][1]))//此路不存在
@@ -127,7 +128,7 @@ public:
     }
 
     //计算以（x,y）为源点，向direction方向延申 6-1格 的路 的value
-    pair<double, double> get_Road_Value(Board* state) const 
+    pair<double, double> get_Road_Value(Board* state) const
     {
         int x = road_x, y = road_y;
         int max_dist = N_TO_WIN;
@@ -143,14 +144,14 @@ public:
 
             if (self_cnt > 0 && oppo_cnt > 0)return { 0,0 };//此路含有双方棋子，已无价值
         }
-        return{ SelfValue[self_cnt],OppoValue[oppo_cnt] };
+        return{ SelfValue[self_cnt], OppoValue[oppo_cnt] };
     }
 
     //提供set排列标准，随意设置，set主要用于去重
-   bool operator< (const Road& t)const
+    bool operator< (const Road& t) const
     {
-        if (road_x != t.road_x)return road_x > t.road_x;
-        if (road_y != t.road_y)return road_y > t.road_y;
+        if (road_x != t.road_x) return road_x > t.road_x;
+        if (road_y != t.road_y) return road_y > t.road_y;
         return direction > t.direction;
     }
 };
@@ -159,7 +160,7 @@ class TreeNode
 {
 public:
     // 树节点初始化
-    TreeNode(TreeNode* _parent, Board* _state, int _color, int _action_1, int _action_2)
+    TreeNode(TreeNode* _parent, Board* _state, int _color, int _action_1, int _action_2, int _depth)
     {
         parent = _parent;
         children.resize(0);
@@ -169,6 +170,8 @@ public:
         visits = 0;
         action_1 = _action_1;
         action_2 = _action_2;
+        depth = _depth;
+        max_depth = _depth;
         if (is_root())
             set_allRoad_value();//对根节点的路全盘扫描 or 设一相对值
         else {
@@ -200,6 +203,7 @@ public:
         double pre_value = 0, now_value = 0;
         int x0 = act_1 / GRID_SIZE, y0 = act_1 % GRID_SIZE;
         int x1 = act_2 / GRID_SIZE, y1 = act_2 % GRID_SIZE;
+
         //先去除两落子
         state->map[x0][y0] = GRID_BLANK;
         state->map[x1][y1] = GRID_BLANK;
@@ -244,6 +248,8 @@ public:
     int action_1, action_2;      // 节点上发生的落子行为
     double road_value;           // 该节点的基于路分析的value 
     double diff_value;           // 从该节点落子的价值
+    int depth;                   // 节点深度（用于调试）
+    int max_depth;               // 已该根为子树的最大深度（用于调试）
 };
 
 class Game
@@ -541,25 +547,33 @@ public:
     // AI棋手初始化
     AIPlayer(Game* _game, int last_action_1, int last_action_2)
     {
-        game = _game;                                                                                  // AI看到了游戏
-        root = new TreeNode(NULL, _game->cur_Board, -_game->cur_player, last_action_1, last_action_2); // 心中建立起蒙特卡洛树根
-        max_times = 2000;                                                                               // 最大模拟次数
-        player_color = GRID_SELF;                                                                      // AI的棋色一定为己方
-        c = 2;                                                                                         // 设置UCB公式的超参数
+        game = _game;               // AI看到了游戏
+        root = new TreeNode(NULL, _game->cur_Board, -_game->cur_player, last_action_1, last_action_2, 0); // 心中建立起蒙特卡洛树根
+        max_times = 20000;          // 最大模拟次数
+        player_color = GRID_SELF;   // AI的棋色一定为己方
+        c = 2;                      // 设置UCB公式的超参数
     }
 
     // 蒙特卡洛树搜索，返回应下的两步棋
     pair<int, int> mcts()
     {
-        int reward;
+        int reward = 0, real_times = 0;
         TreeNode* leave_node, * best_child = root;
+        clock_t start = clock();   // 起始时间
         for (int t = 0; t < max_times; t++)
         {
-            leave_node = select_expand_node(root); // 选择要拓展的节点（初始是根节点）
-            reward = simulate(leave_node);         // 从该节点模拟结果，返回奖励点
+            leave_node = select_expand_node(root);                         // 选择要拓展的节点（初始是根节点）
+            reward = simulate(leave_node);                                 // 从该节点模拟结果，返回奖励点
             back_propagate(leave_node, reward, leave_node->diff_value);    // 将奖励点反向传播
+            clock_t end = clock(); // 结束时间
+            if (end - start >= TIME_TO_SIMULATE)
+            {
+                real_times = t;
+                break;
+            }
         }
-        best_child = select(root);                           // 从树中选择最佳子节点（最佳选择）
+        // cout << root->max_depth << ' ' << real_times << endl;
+        best_child = select(root);                             // 从树中选择最佳子节点（最佳选择）
         return { best_child->action_1, best_child->action_2 }; // 返回最佳选择下的两步棋
     }
 
@@ -658,7 +672,7 @@ public:
         new_state->make_move(action_2, -node->color);
 
         // 新节点
-        TreeNode* new_node = new TreeNode(node, new_state, -node->color, action_1, action_2);
+        TreeNode* new_node = new TreeNode(node, new_state, -node->color, action_1, action_2, node->depth + 1);
         node->children.push_back(new_node);
         return new_node;
     }
@@ -697,10 +711,11 @@ public:
     {
         while (node != NULL)
         {
-            node->visits++;         // 节点的被访问次数+1
-            node->reward += reward; // 节点的奖励点更新
-            node->diff_value += diff_value;
-            node = node->parent;    // 向上遍历
+            node->visits++;                 // 节点的被访问次数+1
+            node->reward += reward;         // 节点的奖励点更新
+            node->diff_value += diff_value; // 节点的获得路价值更新
+            if (node->parent && node->max_depth > node->parent->max_depth) node->parent->max_depth = node->max_depth; // 节点最大深度（用于调试）
+            node = node->parent;            // 向上遍历
         }
     }
 
