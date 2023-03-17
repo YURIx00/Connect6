@@ -7,19 +7,21 @@
 #include <set>
 #include <algorithm>
 
-#define GRID_SIZE 15
-#define GRID_BLANK 0
-#define GRID_SELF 1     // 己方为1
-#define GRID_OPPO -1    // 对方为-1
-#define DISTANCE 1      // 周围的距离
-#define SURROUND_MARK 2 // 用于标记棋子周围的棋格
-#define N_TO_WIN 6
+#define GRID_SIZE 15        // 棋盘的规格
+#define GRID_BLANK 0        // 空白
+#define GRID_SELF 1         // 己方为1
+#define GRID_OPPO -1        // 对方为-1
+#define DISTANCE 1          // 周围的距离
+#define SURROUND_MARK 2     // 用于标记棋子周围的棋格
+#define N_TO_WIN 6          // 需要连续几子才能胜利
 #define INF 0x3f3f3f3f
 
 using namespace std;
 const int mov[8][2] = { {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, -1} };
-const int SelfValue[7] = { 1,10,50,1000,9999,11111,211111 };
-const int OppoValue[7] = { 1,10,50,10000,12222,222222 };
+                       //  零 一  二 三      四     五      六
+const int SelfValue[7] = { 1, 10, 50, 1000,  9999,  11111,  1000000 };
+const int OppoValue[7] = { 1, 10, 50, 10000, 12222, 222222, 1000000 };
+
 class Board
 {
 public:
@@ -108,19 +110,25 @@ public:
     int direction;
     Road(int x_, int y_, int dir) :road_x(x_), road_y(y_), direction(dir) {}
 public:
+
     //判断格子是否在棋盘中
-    bool is_inGrid(int ex, int ey)const {
+    bool is_inGrid(int ex, int ey)const 
+    {
         return (ex >= 0 && ey >= 0 && ex < GRID_SIZE&& ey < GRID_SIZE);
     }
+
     //判断该路是否存在
-    bool is_legalRoad() const {
+    bool is_legalRoad() const 
+    {
         int max_dist = N_TO_WIN;
         if (!is_inGrid(road_x, road_y) || !is_inGrid(road_x + (max_dist - 1) * mov[direction][0], road_y + (max_dist - 1) * mov[direction][1]))//此路不存在
             return false;
         return true;
     }
+
     //计算以（x,y）为源点，向direction方向延申 6-1格 的路 的value
-    pair<double, double> get_Road_Value(Board* state)const {
+    pair<double, double> get_Road_Value(Board* state) const 
+    {
         int x = road_x, y = road_y;
         int max_dist = N_TO_WIN;
         if (!is_legalRoad())//此路不存在
@@ -130,8 +138,8 @@ public:
             x += mov[direction][0];
             y += mov[direction][1];
 
-            if (state->map[x][y] == GRID_SELF)++self_cnt;
-            else if (state->map[x][y] == GRID_OPPO)++oppo_cnt;
+            if (state->map[x][y] == GRID_SELF) self_cnt++;
+            else if (state->map[x][y] == GRID_OPPO) oppo_cnt++;
 
             if (self_cnt > 0 && oppo_cnt > 0)return { 0,0 };//此路含有双方棋子，已无价值
         }
@@ -139,7 +147,7 @@ public:
     }
 
     //提供set排列标准，随意设置，set主要用于去重
-    bool operator< (const Road& t)const
+    bool operator< (const Road& t) const
     {
         return direction > t.direction;
     }
@@ -207,12 +215,12 @@ public:
     double update_Road_StateValue(int x0, int y0, int x1, int y1) {
         int max_dist = N_TO_WIN;
         double self_total_value = 0, oppo_total_threat = 0;
-        set<Road>road_changed;//set去掉重复的路
+        set<Road> road_changed; // set去掉重复的路
 
         pair<double, double> road_valu;
-        for (int i = 0; i < 4; i++) {//方向
-            for (int dist = 0; dist < max_dist; dist++) {//距离
-                road_changed.insert({ x0 + dist * mov[i][0], y0 + dist * mov[i][1], i + 4 });//i+4使路的方向与寻找路的源点的方向反向
+        for (int i = 0; i < 4; i++) { // 方向
+            for (int dist = 0; dist < max_dist; dist++) { // 距离
+                road_changed.insert({ x0 + dist * mov[i][0], y0 + dist * mov[i][1], i + 4 }); // i+4使路的方向与寻找路的源点的方向反向
                 road_changed.insert({ x1 + dist * mov[i][0], y1 + dist * mov[i][1], i + 4 });
             }
         }
@@ -226,14 +234,14 @@ public:
 
 public:
     TreeNode* parent;            // 父节点
-    vector<TreeNode*> children; // 儿子节点数组
+    vector<TreeNode*> children;  // 儿子节点数组
     Board* state;                // 节点棋盘状态
     int color;                   // 节点扮演的角色
     int reward;                  // 节点的奖励点
     int visits;                  // 节点被访问次数
     int action_1, action_2;      // 节点上发生的落子行为
-    double road_value;           //该节点的基于路分析的value 
-    double diff_value;
+    double road_value;           // 该节点的基于路分析的value 
+    double diff_value;           // 从该节点落子的价值
 };
 
 class Game
@@ -533,7 +541,7 @@ public:
     {
         game = _game;                                                                                  // AI看到了游戏
         root = new TreeNode(NULL, _game->cur_Board, -_game->cur_player, last_action_1, last_action_2); // 心中建立起蒙特卡洛树根
-        max_times = 200;                                                                               // 最大模拟次数
+        max_times = 2000;                                                                               // 最大模拟次数
         player_color = GRID_SELF;                                                                      // AI的棋色一定为己方
         c = 2;                                                                                         // 设置UCB公式的超参数
     }
@@ -626,7 +634,7 @@ public:
         }
 
         //if (legal_actions->size() < 2)return  node->parent;  //若除去兄弟后无可拓展节点，  这个应该是因为判断节点是否拓展完时将拓展完毕的判为可拓展所致
-          //if (legal_actions->size() < 2)return  node;          //若除去兄弟后无可拓展节点，  这个应该是因为判断节点是否拓展完时将拓展完毕的判为可拓展所致
+        if (legal_actions->size() < 2)return  node;          //若除去兄弟后无可拓展节点，  这个应该是因为判断节点是否拓展完时将拓展完毕的判为可拓展所致
         set<int>::const_iterator it(legal_actions->begin()); // 集合指针it
         advance(it, rand() % legal_actions->size());         // 从余下的集合随机选择一步
         int action_1 = *it;
@@ -745,24 +753,20 @@ int main()
         }
     }
 
+    // 先手特判
     if (turnID == 1 && 1 == firstself)
     {
         cout << GRID_SIZE / 2 << ' ' << GRID_SIZE / 2 << ' ' << -1 << ' ' << -1 << endl;
         return 0;
     }
 
+    // 空余两空判断
     set<int>* main_legal_actions = main_game->cur_Board->get_legal_actions();
     if (main_legal_actions->size() == 2)
     {
         int action_1 = *main_legal_actions->begin();
         int action_2 = *main_legal_actions->end();
         cout << action_1 / GRID_SIZE << ' ' << action_1 % GRID_SIZE << ' ' << action_2 / GRID_SIZE << ' ' << action_2 % GRID_SIZE << endl;
-        return 0;
-    }
-    if (main_legal_actions->size() == 1)
-    {
-        int action_1 = *main_legal_actions->begin();
-        cout << action_1 / GRID_SIZE << ' ' << action_1 % GRID_SIZE << ' ' << -1 << ' ' << -1 << endl;
         return 0;
     }
     /************************************************************************************/
