@@ -147,8 +147,10 @@ public:
     }
 
     //提供set排列标准，随意设置，set主要用于去重
-    bool operator< (const Road& t) const
+   bool operator< (const Road& t)const
     {
+        if (road_x != t.road_x)return road_x > t.road_x;
+        if (road_y != t.road_y)return road_y > t.road_y;
         return direction > t.direction;
     }
 };
