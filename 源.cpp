@@ -18,7 +18,8 @@
 
 using namespace std;
 const int mov[8][2] = { {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, -1} };
-
+const int SelfValue[7] = { 1,10,50,1000,9999,11111,211111 };
+const int OppoValue[7] = { 1,10,50,10000,12222,222222 };
 class Board
 {
 public:
@@ -71,7 +72,7 @@ public:
             for (int j = -DISTANCE; j <= DISTANCE; j++)
             {
                 int ex = x + i, ey = y + j;
-                if (ex >= 0 && ex < GRID_SIZE && ey >= 0 && ey < GRID_SIZE && map[ex][ey] == 0)
+                if (ex >= 0 && ex < GRID_SIZE && ey >= 0 && ey < GRID_SIZE && map[ex][ey] == GRID_BLANK)
                     map[ex][ey] = SURROUND_MARK;
             }
         }
@@ -100,6 +101,50 @@ public:
     set<int>* legal_actions;       // 合法落子的集合
 };
 
+//表示以（x,y）为源点，向direction方向延申 6-1格 的一条路
+class Road {
+public:
+    int road_x, road_y;
+    int direction;
+    Road(int x_, int y_, int dir) :road_x(x_), road_y(y_), direction(dir) {}
+public:
+    //判断格子是否在棋盘中
+    bool is_inGrid(int ex, int ey)const {
+        return (ex >= 0 && ey >= 0 && ex < GRID_SIZE&& ey < GRID_SIZE);
+    }
+    //判断该路是否存在
+    bool is_legalRoad() const {
+        int max_dist = N_TO_WIN;
+        if (!is_inGrid(road_x, road_y) || !is_inGrid(road_x + (max_dist - 1) * mov[direction][0], road_y + (max_dist - 1) * mov[direction][1]))//此路不存在
+            return false;
+        return true;
+    }
+    //计算以（x,y）为源点，向direction方向延申 6-1格 的路 的value
+    pair<double, double> get_Road_Value(Board* state)const {
+        int x = road_x, y = road_y;
+        int max_dist = N_TO_WIN;
+        if (!is_legalRoad())//此路不存在
+            return { 0,0 };
+        int self_cnt = 0, oppo_cnt = 0;
+        for (int i = 0; i < max_dist; i++) {
+            x += mov[direction][0];
+            y += mov[direction][1];
+
+            if (state->map[x][y] == GRID_SELF)++self_cnt;
+            else if (state->map[x][y] == GRID_OPPO)++oppo_cnt;
+
+            if (self_cnt > 0 && oppo_cnt > 0)return { 0,0 };//此路含有双方棋子，已无价值
+        }
+        return{ SelfValue[self_cnt],OppoValue[oppo_cnt] };
+    }
+
+    //提供set排列标准，随意设置，set主要用于去重
+    bool operator< (const Road& t)const
+    {
+        return direction > t.direction;
+    }
+};
+
 class TreeNode
 {
 public:
@@ -114,13 +159,19 @@ public:
         visits = 0;
         action_1 = _action_1;
         action_2 = _action_2;
+        if (is_root())
+            set_allRoad_value();//对根节点的路全盘扫描 or 设一相对值
+        else {
+            diff_value = get_diff_road_StateValue(_action_1, _action_2);
+            road_value = _parent->road_value + diff_value;
+        }
     }
 
-    // 判断节点是否被下满
+    // 判断节点是否被拓展满
     bool is_full_expand()
     {
         set<int>* legal_actions = state->get_legal_actions();
-        return (int)legal_actions->size() + 1 >= 2 * (int)children.size();
+        return (int)legal_actions->size() <= 2 * (int)children.size() + 1;
     }
 
     // 判断节点是否叶节点
@@ -128,6 +179,50 @@ public:
 
     // 判断节点是否根节点
     bool is_root() { return parent == NULL; }
+
+    //全盘扫描 or 设一相对值
+    void set_allRoad_value() {//将根节点设为0，采用相对计算方式
+        road_value = 0;
+    }
+
+    //基于路计算此状态棋盘棋形的value与父节点差值
+    double  get_diff_road_StateValue(int act_1, int act_2) {
+        double pre_value = 0, now_value = 0;
+        int x0 = act_1 / GRID_SIZE, y0 = act_1 % GRID_SIZE;
+        int x1 = act_2 / GRID_SIZE, y1 = act_2 % GRID_SIZE;
+        //先去除两落子
+        state->map[x0][y0] = GRID_BLANK;
+        state->map[x1][y1] = GRID_BLANK;
+        pre_value += update_Road_StateValue(x0, y0, x1, y1);
+
+        //恢复action_1 action_2
+        state->map[x0][y0] = color;
+        state->map[x1][y1] = color;
+        now_value += update_Road_StateValue(x0, y0, x1, y1);
+        //返回差值
+        return now_value - pre_value;
+    }
+
+    //局部扫描 计算局部的价值
+    double update_Road_StateValue(int x0, int y0, int x1, int y1) {
+        int max_dist = N_TO_WIN;
+        double self_total_value = 0, oppo_total_threat = 0;
+        set<Road>road_changed;//set去掉重复的路
+
+        pair<double, double> road_valu;
+        for (int i = 0; i < 4; i++) {//方向
+            for (int dist = 0; dist < max_dist; dist++) {//距离
+                road_changed.insert({ x0 + dist * mov[i][0], y0 + dist * mov[i][1], i + 4 });//i+4使路的方向与寻找路的源点的方向反向
+                road_changed.insert({ x1 + dist * mov[i][0], y1 + dist * mov[i][1], i + 4 });
+            }
+        }
+        for (auto& road : road_changed) {
+            road_valu = road.get_Road_Value(state);
+            self_total_value += road_valu.first;
+            oppo_total_threat += road_valu.second;
+        }
+        return  self_total_value - oppo_total_threat;
+    }
 
 public:
     TreeNode* parent;            // 父节点
@@ -137,6 +232,8 @@ public:
     int reward;                  // 节点的奖励点
     int visits;                  // 节点被访问次数
     int action_1, action_2;      // 节点上发生的落子行为
+    double road_value;           //该节点的基于路分析的value 
+    double diff_value;
 };
 
 class Game
@@ -450,7 +547,7 @@ public:
         {
             leave_node = select_expand_node(root); // 选择要拓展的节点（初始是根节点）
             reward = simulate(leave_node);         // 从该节点模拟结果，返回奖励点
-            back_propagate(leave_node, reward);    // 将奖励点反向传播
+            back_propagate(leave_node, reward, leave_node->diff_value);    // 将奖励点反向传播
         }
         best_child = select(root);                           // 从树中选择最佳子节点（最佳选择）
         return { best_child->action_1, best_child->action_2 }; // 返回最佳选择下的两步棋
@@ -486,7 +583,7 @@ public:
                 return child;
             }
             // UCB计算公式
-            double ucb = (double)child->reward / (double)child->visits + c * sqrt(2.0 * log((double)node->visits) / (double)child->visits);
+            double ucb = ((double)child->reward + child->diff_value) / (double)child->visits + c * sqrt(2.0 * log((double)node->visits) / (double)child->visits);
             if (ucb == max_ucb)
             { // 该节点的UCB和最大UCB一致，则加入集合
                 select_children.push_back(child);
@@ -507,7 +604,7 @@ public:
 
     // 拓展选择的节点，返回一个可行的且未拓展过的子节点
     TreeNode* expand(TreeNode* node)
-    {
+    {//
         set<int>* node_legal_actions = node->state->get_legal_actions(); // 该节点的合法落子集合
 
         set<int>* legal_actions = new set<int>;
@@ -527,7 +624,9 @@ public:
             legal_actions->erase(child->action_1);
             legal_actions->erase(child->action_2);
         }
-        if (legal_actions->size() < 2)return  node->parent;  //若除去兄弟后无可拓展节点，  这个应该是因为判断节点是否拓展完时将拓展完毕的判为可拓展所致
+
+        //if (legal_actions->size() < 2)return  node->parent;  //若除去兄弟后无可拓展节点，  这个应该是因为判断节点是否拓展完时将拓展完毕的判为可拓展所致
+          //if (legal_actions->size() < 2)return  node;          //若除去兄弟后无可拓展节点，  这个应该是因为判断节点是否拓展完时将拓展完毕的判为可拓展所致
         set<int>::const_iterator it(legal_actions->begin()); // 集合指针it
         advance(it, rand() % legal_actions->size());         // 从余下的集合随机选择一步
         int action_1 = *it;
@@ -561,8 +660,8 @@ public:
         int action = node->action_2;                                             // 该节点的最后一步
         set<int>* legal_actions = simulate_game->cur_Board->get_legal_actions(); // 拿到该节点的合法落子集合
         set<int>::const_iterator it(legal_actions->begin());                     // 集合指针（用于集合的随机选择）
-        while (!legal_actions->empty()) // 该节点已无合法落子
-        {
+        while (!legal_actions->empty()) // 该节点已无合法落子,即直到棋盘下满
+        {//每个循环只走一子
             it = legal_actions->begin();
             advance(it, rand() % legal_actions->size()); // 随机选择一步
             action = *it;
@@ -584,12 +683,13 @@ public:
     }
 
     // 从该节点反向传播
-    void back_propagate(TreeNode* node, int reward)
+    void back_propagate(TreeNode* node, int reward, double diff_value)
     {
         while (node != NULL)
         {
             node->visits++;         // 节点的被访问次数+1
             node->reward += reward; // 节点的奖励点更新
+            node->diff_value += diff_value;
             node = node->parent;    // 向上遍历
         }
     }
