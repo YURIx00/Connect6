@@ -14,12 +14,12 @@
 #define DISTANCE 1              // 周围的距离
 #define SURROUND_MARK 2         // 用于标记棋子周围的棋格
 #define N_TO_WIN 6              // 需要连续几子才能胜利
-#define TIME_TO_SIMULATE 1000   // 用于模拟的毫秒时间
+#define TIME_TO_SIMULATE 970   // 用于模拟的毫秒时间
 #define INF 0x3f3f3f3f
 
 using namespace std;
 const int mov[8][2] = { {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, -1} };
-// 零 一  二  三     四     五      六
+                        // 零 一  二  三     四     五      六
 const int SelfValue[7] = { 1, 10, 50, 1000,  9999,  11111,  1000000 };
 const int OppoValue[7] = { 1, 10, 50, 10000, 12222, 222222, 1000000 };
 
@@ -549,7 +549,7 @@ public:
     {
         game = _game;               // AI看到了游戏
         root = new TreeNode(NULL, _game->cur_Board, -_game->cur_player, last_action_1, last_action_2, 0); // 心中建立起蒙特卡洛树根
-        max_times = 20000;          // 最大模拟次数
+        max_times = INF;          // 最大模拟次数
         player_color = GRID_SELF;   // AI的棋色一定为己方
         c = 2;                      // 设置UCB公式的超参数
     }
