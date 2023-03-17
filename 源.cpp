@@ -19,9 +19,9 @@
 
 using namespace std;
 const int mov[8][2] = { {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, -1} };
-                        // 零 一  二  三     四     五      六
-const int SelfValue[7] = { 1, 10, 50, 1000,  9999,  11111,  1000000 };
-const int OppoValue[7] = { 1, 10, 50, 10000, 12222, 222222, 1000000 };
+                        // 零 一 二  三   四    五    六路
+const int SelfValue[7] = { 1, 1, 20, 40,  200,  200,  1000000 };
+const int OppoValue[7] = { 1, 1, 25, 50,  6000, 6000, 1000000 };
 
 class Board
 {
@@ -546,7 +546,7 @@ public:
     {
         game = _game;               // AI看到了游戏
         root = new TreeNode(NULL, _game->cur_Board, GRID_OPPO, last_action, 0, 1); // 心中建立起蒙特卡洛树根
-        max_times = 5000;           // 最大模拟次数
+        max_times = 6500;           // 最大模拟次数
         player_color = GRID_SELF;   // AI的棋色一定为己方
         c = 2;                      // 设置UCB公式的超参数
     }
@@ -555,7 +555,7 @@ public:
     pair<int, int> mcts()
     {
         int reward = 0, real_times = 0;
-        TreeNode *leave_node, *best_child_1 = root, *best_child_2 = NULL;
+        TreeNode* leave_node;
         clock_t start = clock();   // 起始时间
         for (int t = 0; t < max_times; t++)
         {
@@ -567,8 +567,8 @@ public:
         }
         //cout << root->max_depth << ' ' << real_times << endl;
 
-        best_child_1 = select(root);                             // 从树中选择最佳子节点（最佳选择）
-        best_child_2 = select(best_child_1);
+        TreeNode* best_child_1 = select(root);                             // 从树中选择最佳子节点（最佳选择）
+        TreeNode* best_child_2 = select(best_child_1);
         return { best_child_1->action, best_child_2->action };   // 返回最佳选择下的两步棋
     }
 
@@ -602,7 +602,7 @@ public:
                 return child;
             }
             // UCB计算公式
-            double ucb = ((double)child->reward + child->diff_value) / (double)child->visits + c * sqrt(2.0 * log((double)node->visits) / (double)child->visits);
+            double ucb = ((double)child->reward) / (double)child->visits + c * sqrt(2.0 * log((double)node->visits) / (double)child->visits) + child->diff_value / 20;
             if (ucb == max_ucb)
             { // 该节点的UCB和最大UCB一致，则加入集合
                 select_children.push_back(child);
@@ -707,6 +707,7 @@ public:
     // 从该节点反向传播
     void back_propagate(TreeNode* node, int reward, double diff_value)
     {
+        int node_depth = node->depth;
         while (node != NULL)
         {
             node->visits++;                                    // 节点的被访问次数+1
@@ -715,7 +716,7 @@ public:
                 node->parent->max_depth = node->max_depth;     // 节点最大深度（用于调试）
             node = node->parent;                               // 向上遍历
             if(node && node->parent) 
-                node->diff_value += diff_value * node->color;  // 节点的获得路价值更新
+                node->diff_value += (diff_value * node->color) / node_depth;  // 节点的获得路价值更新
         }
     }
 
