@@ -14,14 +14,14 @@
 #define DISTANCE 1              // 周围的距离
 #define SURROUND_MARK 2         // 用于标记棋子周围的棋格
 #define N_TO_WIN 6              // 需要连续几子才能胜利
-#define TIME_TO_SIMULATE 970    // 用于模拟的毫秒时间
+#define TIME_TO_SIMULATE 970   // 用于模拟的毫秒时间
 #define INF 0x3f3f3f3f
 
 using namespace std;
 const int mov[8][2] = { {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, -1} };
-                        // 零 一 二  三   四    五    六路
-const int SelfValue[7] = { 1, 1, 20, 40,  200,  200,  1000000 };
-const int OppoValue[7] = { 1, 1, 25, 50,  6000, 6000, 1000000 };
+                        // 零 一  二  三     四     五      六
+const int SelfValue[7] = { 1, 10, 50, 1000,  9999,  11111,  1000000 };
+const int OppoValue[7] = { 1, 10, 50, 10000, 12222, 222222, 1000000 };
 
 class Board
 {
@@ -160,7 +160,7 @@ class TreeNode
 {
 public:
     // 树节点初始化
-    TreeNode(TreeNode* _parent, Board* _state, int _color, int _action, int _depth, int _chesses)
+    TreeNode(TreeNode* _parent, Board* _state, int _color, int _action_1, int _action_2, int _depth)
     {
         parent = _parent;
         children.resize(0);
@@ -168,14 +168,14 @@ public:
         color = _color;
         reward = 0;
         visits = 0;
-        action = _action;
+        action_1 = _action_1;
+        action_2 = _action_2;
         depth = _depth;
         max_depth = _depth;
-        chesses = _chesses;
         if (is_root())
             set_allRoad_value();//对根节点的路全盘扫描 or 设一相对值
         else {
-            diff_value = get_diff_road_StateValue(action);
+            diff_value = get_diff_road_StateValue(_action_1, _action_2);
             road_value = _parent->road_value + diff_value;
         }
     }
@@ -184,7 +184,7 @@ public:
     bool is_full_expand()
     {
         set<int>* legal_actions = state->get_legal_actions();
-        return (int)legal_actions->size() <= (int)children.size();
+        return (int)legal_actions->size() <= 2 * (int)children.size() + 1;
     }
 
     // 判断节点是否叶节点
@@ -199,23 +199,26 @@ public:
     }
 
     //基于路计算此状态棋盘棋形的value与父节点差值
-    double  get_diff_road_StateValue(int act) {
+    double  get_diff_road_StateValue(int act_1, int act_2) {
         double pre_value = 0, now_value = 0;
-        int x = act / GRID_SIZE, y = act % GRID_SIZE;
+        int x0 = act_1 / GRID_SIZE, y0 = act_1 % GRID_SIZE;
+        int x1 = act_2 / GRID_SIZE, y1 = act_2 % GRID_SIZE;
 
-        //先去除该落子
-        state->map[x][y] = GRID_BLANK;
-        pre_value += update_Road_StateValue(x, y);
+        //先去除两落子
+        state->map[x0][y0] = GRID_BLANK;
+        state->map[x1][y1] = GRID_BLANK;
+        pre_value += update_Road_StateValue(x0, y0, x1, y1);
 
         //恢复action_1 action_2
-        state->map[x][y] = color;
-        now_value += update_Road_StateValue(x, y);
+        state->map[x0][y0] = color;
+        state->map[x1][y1] = color;
+        now_value += update_Road_StateValue(x0, y0, x1, y1);
         //返回差值
         return now_value - pre_value;
     }
 
     //局部扫描 计算局部的价值
-    double update_Road_StateValue(int x, int y) {
+    double update_Road_StateValue(int x0, int y0, int x1, int y1) {
         int max_dist = N_TO_WIN;
         double self_total_value = 0, oppo_total_threat = 0;
         set<Road> road_changed; // set去掉重复的路
@@ -223,7 +226,8 @@ public:
         pair<double, double> road_valu;
         for (int i = 0; i < 4; i++) { // 方向
             for (int dist = 0; dist < max_dist; dist++) { // 距离
-                road_changed.insert({ x + dist * mov[i][0], y + dist * mov[i][1], i + 4 }); // i+4使路的方向与寻找路的源点的方向反向
+                road_changed.insert({ x0 + dist * mov[i][0], y0 + dist * mov[i][1], i + 4 }); // i+4使路的方向与寻找路的源点的方向反向
+                road_changed.insert({ x1 + dist * mov[i][0], y1 + dist * mov[i][1], i + 4 });
             }
         }
         for (auto& road : road_changed) {
@@ -241,12 +245,11 @@ public:
     int color;                   // 节点扮演的角色
     int reward;                  // 节点的奖励点
     int visits;                  // 节点被访问次数
-    int action;                  // 节点上发生的落子行为
+    int action_1, action_2;      // 节点上发生的落子行为
     double road_value;           // 该节点的基于路分析的value 
     double diff_value;           // 从该节点落子的价值
     int depth;                   // 节点深度（用于调试）
     int max_depth;               // 已该根为子树的最大深度（用于调试）
-    int chesses;                 // 能落子数
 };
 
 class Game
@@ -261,11 +264,11 @@ public:
     }
 
     // 继承游戏（用于模拟）
-    Game(Board* state, int color, int _chesses)
+    Game(Board* state, int color)
     {
         cur_Board = new Board(state, NULL); // 棋盘继承
         cur_player = color;                 // 颜色继承
-        chesses = _chesses;                 // 余棋继承
+        chesses = 2;                        // 余棋初始化为2
     }
 
     // 合法落子
@@ -505,7 +508,7 @@ public:
     // move落子
     void make_move(int move)
     {
-        if (move == -1 || move  == -1 * GRID_SIZE - 1)
+        if (move == -1)
             return; // 不落子判断
         cur_Board->make_move(move, cur_player);
         chesses--;
@@ -542,11 +545,11 @@ class AIPlayer
 {
 public:
     // AI棋手初始化
-    AIPlayer(Game* _game, int last_action)
+    AIPlayer(Game* _game, int last_action_1, int last_action_2)
     {
         game = _game;               // AI看到了游戏
-        root = new TreeNode(NULL, _game->cur_Board, GRID_OPPO, last_action, 0, 1); // 心中建立起蒙特卡洛树根
-        max_times = 6500;           // 最大模拟次数
+        root = new TreeNode(NULL, _game->cur_Board, -_game->cur_player, last_action_1, last_action_2, 0); // 心中建立起蒙特卡洛树根
+        max_times = INF;          // 最大模拟次数
         player_color = GRID_SELF;   // AI的棋色一定为己方
         c = 2;                      // 设置UCB公式的超参数
     }
@@ -555,7 +558,7 @@ public:
     pair<int, int> mcts()
     {
         int reward = 0, real_times = 0;
-        TreeNode* leave_node;
+        TreeNode* leave_node, * best_child = root;
         clock_t start = clock();   // 起始时间
         for (int t = 0; t < max_times; t++)
         {
@@ -563,19 +566,21 @@ public:
             reward = simulate(leave_node);                                 // 从该节点模拟结果，返回奖励点
             back_propagate(leave_node, reward, leave_node->diff_value);    // 将奖励点反向传播
             clock_t end = clock(); // 结束时间
-            //if (end - start >= TIME_TO_SIMULATE){real_times = t;break;}
+            if (end - start >= TIME_TO_SIMULATE)
+            {
+                real_times = t;
+                break;
+            }
         }
-        //cout << root->max_depth << ' ' << real_times << endl;
-
-        TreeNode* best_child_1 = select(root);                             // 从树中选择最佳子节点（最佳选择）
-        TreeNode* best_child_2 = select(best_child_1);
-        return { best_child_1->action, best_child_2->action };   // 返回最佳选择下的两步棋
+        // cout << root->max_depth << ' ' << real_times << endl;
+        best_child = select(root);                             // 从树中选择最佳子节点（最佳选择）
+        return { best_child->action_1, best_child->action_2 }; // 返回最佳选择下的两步棋
     }
 
     // 从该节点选择子节点拓展
     TreeNode* select_expand_node(TreeNode* node)
     {
-        while (game->is_end(node->state, node->action) == 0)
+        while (game->is_end(node->state, node->action_2) == 0)
         { // 若棋局已结束
             if (node->children.size() == 0 || !node->is_full_expand())
             {                        // 若该节点无子节点 or 子节点未完全拓展
@@ -602,7 +607,7 @@ public:
                 return child;
             }
             // UCB计算公式
-            double ucb = ((double)child->reward) / (double)child->visits + c * sqrt(2.0 * log((double)node->visits) / (double)child->visits) + child->diff_value / 20;
+            double ucb = ((double)child->reward + child->diff_value) / (double)child->visits + c * sqrt(2.0 * log((double)node->visits) / (double)child->visits);
             if (ucb == max_ucb)
             { // 该节点的UCB和最大UCB一致，则加入集合
                 select_children.push_back(child);
@@ -632,39 +637,42 @@ public:
             legal_actions->insert(tmp); // tmp为int i*GRID_SIZE+j
         }
 
-        if (legal_actions->empty())                      
-            return node->parent; // 若无处落子则返回父节点
+        if (legal_actions->empty())
+        {                        // 若无处落子
+            return node->parent; // 则返回父节点
+        }
 
         // 排除子节点的落子
         for (auto child : node->children)
         {
-            legal_actions->erase(child->action);
+            legal_actions->erase(child->action_1);
+            legal_actions->erase(child->action_2);
         }
 
+        //if (legal_actions->size() < 2)return  node->parent;  //若除去兄弟后无可拓展节点，  这个应该是因为判断节点是否拓展完时将拓展完毕的判为可拓展所致
+        if (legal_actions->size() < 2)return  node;          //若除去兄弟后无可拓展节点，  这个应该是因为判断节点是否拓展完时将拓展完毕的判为可拓展所致
         set<int>::const_iterator it(legal_actions->begin()); // 集合指针it
         advance(it, rand() % legal_actions->size());         // 从余下的集合随机选择一步
-        int action = *it;
-        legal_actions->erase(action);                        // 用于获取action
+        int action_1 = *it;
+        legal_actions->erase(action_1); // 用于获取action_2,临时删去action_1
+        it = legal_actions->begin();
+        advance(it, rand() % legal_actions->size()); // 从余下的集合随机选择一步
+        int action_2 = *it;
+        legal_actions->erase(action_2); // 重建action_1
 
-        // 恢复
-        for (auto child : node->children) 
-        { 
-            legal_actions->insert(child->action);
-        }
-
-        int new_node_color = node->color;
-        int new_node_chesses = node->chesses - 1;
-        if (new_node_chesses == 0) {
-            new_node_color = -new_node_color;
-            new_node_chesses = 2;
+        for (auto child : node->children)
+        { // 恢复
+            legal_actions->insert(child->action_1);
+            legal_actions->insert(child->action_2);
         }
 
         // 新节点的state
         Board* new_state = new Board(node->state, legal_actions);
-        new_state->make_move(action, new_node_color);
+        new_state->make_move(action_1, -node->color); // 选择的两步构成了新节点
+        new_state->make_move(action_2, -node->color);
 
         // 新节点
-        TreeNode* new_node = new TreeNode(node, new_state, new_node_color, action, node->depth + 1, new_node_chesses);
+        TreeNode* new_node = new TreeNode(node, new_state, -node->color, action_1, action_2, node->depth + 1);
         node->children.push_back(new_node);
         return new_node;
     }
@@ -672,14 +680,8 @@ public:
     // 从该节点进行随机模拟，结果
     int simulate(TreeNode* node)
     {
-        int new_color = node->color;
-        int new_chesses = node->chesses - 1;
-        if (new_chesses == 0) {
-            new_color = -new_color;
-            new_chesses = 2;
-        }
-        Game* simulate_game = new Game(node->state, new_color, new_chesses);               // 虚拟游戏初始化
-        int action = node->action;                                             // 该节点的最后一步
+        Game* simulate_game = new Game(node->state, -node->color);               // 虚拟游戏初始化
+        int action = node->action_2;                                             // 该节点的最后一步
         set<int>* legal_actions = simulate_game->cur_Board->get_legal_actions(); // 拿到该节点的合法落子集合
         set<int>::const_iterator it(legal_actions->begin());                     // 集合指针（用于集合的随机选择）
         while (!legal_actions->empty()) // 该节点已无合法落子,即直到棋盘下满
@@ -707,16 +709,13 @@ public:
     // 从该节点反向传播
     void back_propagate(TreeNode* node, int reward, double diff_value)
     {
-        int node_depth = node->depth;
         while (node != NULL)
         {
-            node->visits++;                                    // 节点的被访问次数+1
-            node->reward += reward * node->color;              // 节点的奖励点更新
-            if (node->parent && node->max_depth > node->parent->max_depth) 
-                node->parent->max_depth = node->max_depth;     // 节点最大深度（用于调试）
-            node = node->parent;                               // 向上遍历
-            if(node && node->parent) 
-                node->diff_value += (diff_value * node->color) / node_depth;  // 节点的获得路价值更新
+            node->visits++;                 // 节点的被访问次数+1
+            node->reward += reward;         // 节点的奖励点更新
+            node->diff_value += diff_value; // 节点的获得路价值更新
+            if (node->parent && node->max_depth > node->parent->max_depth) node->parent->max_depth = node->max_depth; // 节点最大深度（用于调试）
+            node = node->parent;            // 向上遍历
         }
     }
 
@@ -733,7 +732,7 @@ int main()
     srand(time(0));
     Game* main_game = new Game();
     int x0, y0, x1, y1;
-    int last_action = -1; // 记录最后两步（用于创建蒙特拉洛树根）
+    int last_action_1 = -1, last_action_2 = -1; // 记录最后两步（用于创建蒙特拉洛树根）
     // 分析自己收到的输入和自己过往的输出，并恢复棋盘状态
     int turnID;
     bool firstself = false;
@@ -743,7 +742,8 @@ int main()
     {
         // 根据这些输入输出逐渐恢复状态到当前回合
         cin >> x0 >> y0 >> x1 >> y1;
-        last_action = x1 * GRID_SIZE + y1;
+        last_action_1 = x0 * GRID_SIZE + y0; // 不断更新这两步
+        last_action_2 = x1 * GRID_SIZE + y1;
         if (x0 == -1)
         {
             // 第一回合收到坐标是-1, -1，说明我是黑方（第一回合落一子的角色）
@@ -766,7 +766,6 @@ int main()
                 // 模拟己方落子
                 main_game->make_move(x0, y0);
                 main_game->make_move(x1, y1);
-
             }
         }
     }
@@ -790,10 +789,10 @@ int main()
     /************************************************************************************/
     /***在下面填充你的代码，决策结果（本方将落子的位置）存入startX、startY、resultX、resultY中*****/
     // 下面仅为随机策略的示例代码，且效率低，可删除
-    AIPlayer* AI = new AIPlayer(main_game, last_action); // 创建AI
+    AIPlayer* AI = new AIPlayer(main_game, last_action_1, last_action_2); // 创建AI
     pair<int, int> pair_actions = AI->mcts();                             // 从蒙特卡洛树取得结果
-    int best_action_1 = pair_actions.first, best_action_2 = pair_actions.second;
-    int startX = best_action_1 / GRID_SIZE, startY = best_action_1 % GRID_SIZE, resultX = best_action_2 / GRID_SIZE, resultY = best_action_2 % GRID_SIZE;
+    int action_1 = pair_actions.first, action_2 = pair_actions.second;
+    int startX = action_1 / GRID_SIZE, startY = action_1 % GRID_SIZE, resultX = action_2 / GRID_SIZE, resultY = action_2 % GRID_SIZE;
     /****在上方填充你的代码，决策结果（本方将落子的位置）存入startX、startY、resultX、resultY中****/
     /************************************************************************************/
 
