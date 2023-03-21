@@ -23,7 +23,7 @@ using namespace std;
 const int mov[8][2] = { {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, -1} };
 // 零 一  二  三     四     五      六
 const int SelfValue[7] = { 0, 10, 50, 1000, 5000, 12200, INF };
-const int OppoValue[7] = { 0, 10, 50, 1030, 8090, 22399, INF };
+const int OppoValue[7] = { 0, 10, 50, 3030, 10090, 32399, INF };
 const int MaxAction_1[MAX_DEPTH+1] = { 25,40,60,100,200,300,300,300,300,};
 class Board
 {
@@ -136,8 +136,16 @@ public:
         int max_dist = N_TO_WIN;
         if (!is_legalRoad())//此路不存在
             return { 0,0 };
+        //if (x == 7 && y == 9) {
+        //    cout << endl;
+        //};//调试用
         int self_cnt = 0, oppo_cnt = 0;
+        //没有加0
+        x -= mov[direction][0];
+        y -= mov[direction][1];
         for (int i = 0; i < max_dist; i++) {
+            
+            
             x += mov[direction][0];
             y += mov[direction][1];
 
@@ -146,6 +154,7 @@ public:
 
             if (self_cnt > 0 && oppo_cnt > 0)return { 0,0 };//此路含有双方棋子，已无价值
         }
+      //  if (self_cnt == max_dist)cout << "win";
         return{ SelfValue[self_cnt], OppoValue[oppo_cnt] };
     }
 
@@ -241,7 +250,7 @@ public:
             self_total_value += road_valu.first;
             oppo_total_threat += road_valu.second;
         }
-        return  (self_total_value - oppo_total_threat);
+        return  (self_total_value - oppo_total_threat)*color;
     }
 
    /* bool operator<(const TreeNode& node)const {
@@ -563,13 +572,15 @@ public:
     Board* state;
     int color;
     Action(Board* state_, int x_, int y_, int color_) :x(x_), y(y_), state(state_), color(color_) {
-        w = get_state_value();
+        w = get_Action_value();
     }
-
+    //得到该步棋的价值
     double get_state_value() {
         int max_dist = N_TO_WIN;
         double self_total_value = 0, oppo_total_threat = 0;
-
+        //if (x == 7 && y == 9) {
+        //    cout << endl;
+        //};//调试用断点
         pair<double, double> road_valu;
         for (int i = 0; i < 4; i++) { // 方向
             for (int dist = 0; dist < max_dist; dist++) { // 距离
@@ -579,13 +590,16 @@ public:
                 oppo_total_threat += road_valu.second;
             }
         }
-        return  self_total_value - oppo_total_threat;
+        return  (self_total_value - oppo_total_threat)*color;
 
     }
     double get_Action_value() {
         double pre_value = 0, now_value = 0;
         pre_value += get_state_value();
         //走子
+        //if (x == 7 && y == 9) {
+        //    cout << endl;
+        //};//调试用断点
         int tmp_color = state->map[x][y];
         state->map[x][y] = color;
         now_value += get_state_value();
@@ -617,7 +631,8 @@ public:
     // 蒙特卡洛树搜索，返回应下的两步棋
     pair<int, int> mcts()
     {
-        int reward = 0, real_times = 0;
+        int reward = 0;
+      //  int real_times = 0;
         TreeNode* leave_node, * best_child = root;
         clock_t start = clock();   // 起始时间
         for (int t = 0; t < max_times; t++)
@@ -628,7 +643,7 @@ public:
             clock_t end = clock(); // 结束时间
             if (end - start >= TIME_TO_SIMULATE)
             {
-                real_times = t;
+               // real_times = t;
                 break;
             }
         }
@@ -718,8 +733,8 @@ public:
         it1 = legal_actions.begin();
         for (int i = 0; i <= maxSize_Action_1&&it1!=legal_actions.end(); i++, it1++) {//选取前若干个作为action_1
             set<Action>::iterator it2 = legal_actions.begin();
-          
-            for (int j = 0; j <= maxSize_Action_1 &&it2 != legal_actions.end(); j++, it2++) {
+ //         修改棋盘
+            for (int j = 0; j <= maxSize_Action_1*5 &&it2 != legal_actions.end(); j++, it2++) {
                 Action act_2 = *it2;
                 int act1 = it1->x * GRID_SIZE + it1->y;
                 int act2 = act_2.x * GRID_SIZE + act_2.y;
