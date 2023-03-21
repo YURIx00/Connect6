@@ -15,16 +15,16 @@
 #define DISTANCE 1              // 周围的距离
 #define SURROUND_MARK 2         // 用于标记棋子周围的棋格
 #define N_TO_WIN 6              // 需要连续几子才能胜利
-#define TIME_TO_SIMULATE 970   // 用于模拟的毫秒时间
-#define MAX_DEPTH       10       //最大深度
+#define TIME_TO_SIMULATE 970    // 用于模拟的毫秒时间
+#define MAX_DEPTH       10      // 最大深度
 #define INF 0x3f3f3f3f
 
 using namespace std;
 const int mov[8][2] = { {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, -1} };
 // 零 一  二  三     四     五      六
-const int SelfValue[7] = { 0, 10, 50, 1000, 5000, 22200, 100000 };
-const int OppoValue[7] = { 0, 10, 50, 1030, 5090, 22399, 100999 };
-const int MaxAction_1[MAX_DEPTH+1] = { 30,40,50,200,200,80,100,150,200,};
+const int SelfValue[7] = { 0, 10, 50, 1000, 5000, 12200, INF };
+const int OppoValue[7] = { 0, 10, 50, 1030, 8090, 22399, INF };
+const int MaxAction_1[MAX_DEPTH+1] = { 25,40,60,100,200,300,300,300,300,};
 class Board
 {
 public:
@@ -241,7 +241,7 @@ public:
             self_total_value += road_valu.first;
             oppo_total_threat += road_valu.second;
         }
-        return  self_total_value - oppo_total_threat;
+        return  (self_total_value - oppo_total_threat);
     }
 
    /* bool operator<(const TreeNode& node)const {
@@ -260,8 +260,8 @@ public:
     double road_value;           // 该节点的基于路分析的value 
     double diff_value;           // 从该节点落子的价值
     int depth;                   // 节点深度（用于调试）
-    int max_depth;               // 已该根为子树的最大深度（用于调试）
-    bool been_expand;           //是否拓展过，一旦拓展即拓展满
+    int max_depth;               // 以该结点为根的子树的最大深度（用于调试）
+    bool been_expand;            // 是否拓展过，一旦拓展即拓展满
 };
 bool cmp_TreeNode(const TreeNode* node1, const TreeNode* node2) {
     return node1->diff_value > node2->diff_value;
@@ -595,8 +595,8 @@ public:
         return now_value - pre_value;
     }
     bool operator<(const Action& act)const {
-        if (w != act.w)return w > act.w;//按w值降序
-        if (x != act.x)return abs(x - GRID_SIZE / 2) < abs(act.x - GRID_SIZE / 2);//给出set顺序，同时避免选点偏向某个方向
+        if (w != act.w) return w > act.w;//按w值降序
+        if (x != act.x) return abs(x - GRID_SIZE / 2) < abs(act.x - GRID_SIZE / 2);//给出set顺序，同时避免选点偏向某个方向
         return  abs(y - GRID_SIZE / 2) < abs(act.y - GRID_SIZE / 2);
     }
 };
@@ -617,7 +617,7 @@ public:
     // 蒙特卡洛树搜索，返回应下的两步棋
     pair<int, int> mcts()
     {
-        int reward = 0/*, real_times = 0*/;
+        int reward = 0, real_times = 0;
         TreeNode* leave_node, * best_child = root;
         clock_t start = clock();   // 起始时间
         for (int t = 0; t < max_times; t++)
@@ -628,11 +628,11 @@ public:
             clock_t end = clock(); // 结束时间
             if (end - start >= TIME_TO_SIMULATE)
             {
-               // real_times = t;
+                real_times = t;
                 break;
             }
         }
-//         cout << root->max_depth << ' ' << real_times << endl;
+ //       cout << root->max_depth << ' ' << real_times << endl;
         best_child = select(root);                             // 从树中选择最佳子节点（最佳选择）
         return { best_child->action_1, best_child->action_2 }; // 返回最佳选择下的两步棋
     }
@@ -666,7 +666,7 @@ public:
                 return child;
             }
             // UCB计算公式
-            double ucb = ((double)child->reward + 2*child->diff_value) / (double)child->visits + 
+            double ucb = ((double)child->reward + child->diff_value) / (double)child->visits + 
                 c * sqrt(2.0 * log((double)node->visits) / (double)child->visits);
             if (ucb == max_ucb)
             { // 该节点的UCB和最大UCB一致，则加入集合
@@ -717,9 +717,10 @@ public:
         }*/
         it1 = legal_actions.begin();
         for (int i = 0; i <= maxSize_Action_1&&it1!=legal_actions.end(); i++, it1++) {//选取前若干个作为action_1
-
-           
-            for (auto& act_2 : legal_actions) {
+            set<Action>::iterator it2 = legal_actions.begin();
+          
+            for (int j = 0; j <= maxSize_Action_1 &&it2 != legal_actions.end(); j++, it2++) {
+                Action act_2 = *it2;
                 int act1 = it1->x * GRID_SIZE + it1->y;
                 int act2 = act_2.x * GRID_SIZE + act_2.y;
                 if ((it1->x != act_2.x || it1->y != act_2.y) && act_made.count({ min(act1,act2),max(act1,act2) }) == 0) {
