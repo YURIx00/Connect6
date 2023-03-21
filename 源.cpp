@@ -23,7 +23,7 @@ using namespace std;
 const int mov[8][2] = { {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, -1} };
 // 零 一  二  三     四     五      六
 const int SelfValue[7] = { 0, 10, 50, 1000, 5000, 12200, INF };
-const int OppoValue[7] = { 0, 10, 50, 3030, 10090, 32399, INF };
+const int OppoValue[7] = { 0, 10, 50, 3030, 12290, 32399, INF };
 const int MaxAction_1[MAX_DEPTH+1] = { 25,40,60,100,200,300,300,300,300,};
 class Board
 {
