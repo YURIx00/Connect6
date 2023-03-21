@@ -19,9 +19,9 @@
 
 using namespace std;
 const int mov[8][2] = { {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, -1} };
-                        // 零 一 二  三   四    五    六路
-const int SelfValue[7] = { 1, 1, 20, 40,  200,  200,  1000000 };
-const int OppoValue[7] = { 1, 1, 25, 50,  6000, 6000, 1000000 };
+                        // 零 一 二  三   四    五     六路
+const int SelfValue[7] = { 1, 1, 20, 40,  200,  1000,  1000000 };
+const int OppoValue[7] = { 1, 1, 25, 50,  6000, 10000, 1000000 };
 
 class Board
 {
@@ -546,30 +546,23 @@ public:
     {
         game = _game;               // AI看到了游戏
         root = new TreeNode(NULL, _game->cur_Board, GRID_OPPO, last_action, 0, 1); // 心中建立起蒙特卡洛树根
-        max_times = 6500;           // 最大模拟次数
         player_color = GRID_SELF;   // AI的棋色一定为己方
         c = 2;                      // 设置UCB公式的超参数
     }
 
     // 蒙特卡洛树搜索，返回应下的两步棋
-    pair<int, int> mcts()
+    TreeNode* mcts(TreeNode* train_root, int train_time)
     {
-        int reward = 0, real_times = 0;
         TreeNode* leave_node;
-        clock_t start = clock();   // 起始时间
-        for (int t = 0; t < max_times; t++)
+        int reward = 0;
+        for (int t = 0; t < train_time; t++)
         {
-            leave_node = select_expand_node(root);                         // 选择要拓展的节点（初始是根节点）
+            leave_node = select_expand_node(train_root);                   // 选择要拓展的节点（初始是根节点）
             reward = simulate(leave_node);                                 // 从该节点模拟结果，返回奖励点
             back_propagate(leave_node, reward, leave_node->diff_value);    // 将奖励点反向传播
-            clock_t end = clock(); // 结束时间
-            //if (end - start >= TIME_TO_SIMULATE){real_times = t;break;}
         }
-        //cout << root->max_depth << ' ' << real_times << endl;
 
-        TreeNode* best_child_1 = select(root);                             // 从树中选择最佳子节点（最佳选择）
-        TreeNode* best_child_2 = select(best_child_1);
-        return { best_child_1->action, best_child_2->action };   // 返回最佳选择下的两步棋
+        return select(root);
     }
 
     // 从该节点选择子节点拓展
@@ -623,7 +616,7 @@ public:
 
     // 拓展选择的节点，返回一个可行的且未拓展过的子节点
     TreeNode* expand(TreeNode* node)
-    {//
+    {
         set<int>* node_legal_actions = node->state->get_legal_actions(); // 该节点的合法落子集合
 
         set<int>* legal_actions = new set<int>;
@@ -700,7 +693,7 @@ public:
             }
         }
         int winner = game->is_end(simulate_game->cur_Board, action); // 获取赢家（若无赢家，返回0）
-        int reward = winner;                                    // 胜者为己方（1），对方（-1），和局（0）
+        int reward = winner;                                         // 胜者为己方（1），对方（-1），和局（0）
         return reward;                                               // 返回奖励点
     }
 
@@ -716,14 +709,13 @@ public:
                 node->parent->max_depth = node->max_depth;     // 节点最大深度（用于调试）
             node = node->parent;                               // 向上遍历
             if(node && node->parent) 
-                node->diff_value += (diff_value * node->color) / node_depth;  // 节点的获得路价值更新
+                node->diff_value += diff_value / node_depth;   // 节点的获得路价值更新
         }
     }
 
 public:
     Game* game;       // AI看到的游戏
     TreeNode* root;   // 蒙特卡洛树根
-    int max_times;    // 最大迭代次数
     int player_color; // 玩家颜色
     double c;         // UCB超参数
 };
@@ -778,21 +770,15 @@ int main()
         return 0;
     }
 
-    // 空余两空判断
-    set<int>* main_legal_actions = main_game->cur_Board->get_legal_actions();
-    if (main_legal_actions->size() == 2)
-    {
-        int action_1 = *main_legal_actions->begin();
-        int action_2 = *main_legal_actions->end();
-        cout << action_1 / GRID_SIZE << ' ' << action_1 % GRID_SIZE << ' ' << action_2 / GRID_SIZE << ' ' << action_2 % GRID_SIZE << endl;
-        return 0;
-    }
     /************************************************************************************/
     /***在下面填充你的代码，决策结果（本方将落子的位置）存入startX、startY、resultX、resultY中*****/
     // 下面仅为随机策略的示例代码，且效率低，可删除
     AIPlayer* AI = new AIPlayer(main_game, last_action); // 创建AI
-    pair<int, int> pair_actions = AI->mcts();                             // 从蒙特卡洛树取得结果
-    int best_action_1 = pair_actions.first, best_action_2 = pair_actions.second;
+    TreeNode* best_child1 = AI->mcts(AI->root, 500);   
+    best_child1->parent = NULL;
+    AI->root = best_child1;
+    TreeNode* best_child2 = AI->mcts(best_child1, 5500);
+    int best_action_1 = best_child1->action, best_action_2 = best_child2->action;
     int startX = best_action_1 / GRID_SIZE, startY = best_action_1 % GRID_SIZE, resultX = best_action_2 / GRID_SIZE, resultY = best_action_2 % GRID_SIZE;
     /****在上方填充你的代码，决策结果（本方将落子的位置）存入startX、startY、resultX、resultY中****/
     /************************************************************************************/
