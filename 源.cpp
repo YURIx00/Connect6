@@ -632,7 +632,6 @@ public:
     pair<int, int> mcts()
     {
         int reward = 0;
-        //  int real_times = 0;
         TreeNode* leave_node, * best_child = root;
         clock_t start = clock();   // 起始时间
         for (int t = 0; t < max_times; t++)
@@ -641,13 +640,8 @@ public:
             reward = simulate(leave_node);                                 // 从该节点模拟结果，返回奖励点
             back_propagate(leave_node, reward, leave_node->diff_value);    // 将奖励点反向传播
             clock_t end = clock(); // 结束时间
-            if (end - start >= TIME_TO_SIMULATE)
-            {
-                // real_times = t;
-                break;
-            }
+            if (end - start >= TIME_TO_SIMULATE) break;
         }
-        //       cout << root->max_depth << ' ' << real_times << endl;
         best_child = select(root);                             // 从树中选择最佳子节点（最佳选择）
         return { best_child->action_1, best_child->action_2 }; // 返回最佳选择下的两步棋
     }
@@ -681,8 +675,8 @@ public:
                 return child;
             }
             // UCB计算公式
-            double ucb = ((double)child->reward + child->diff_value) / (double)child->visits +
-                c * sqrt(2.0 * log((double)node->visits) / (double)child->visits);
+            double ucb = ((double)child->reward) / (double)child->visits + c * sqrt(2.0 * log((double)node->visits) / (double)child->visits)
+                + child->diff_value / child->depth;
             if (ucb == max_ucb)
             { // 该节点的UCB和最大UCB一致，则加入集合
                 select_children.push_back(child);
@@ -829,7 +823,7 @@ public:
             node->visits++;                 // 节点的被访问次数+1
             node->reward += reward;         // 节点的奖励点更新
             node->diff_value += diff_value / (double)node->depth; // 节点的获得路价值更新
-            if (node->parent && node->max_depth > node->parent->max_depth) 
+            if (node->parent && node->max_depth > node->parent->max_depth)
                 node->parent->max_depth = node->max_depth; // 节点最大深度（用于调试）
             node = node->parent;            // 向上遍历
         }
@@ -889,10 +883,29 @@ int main()
     // 先手特判
     if (turnID == 1 && 1 == firstself)
     {
-        cout << GRID_SIZE / 2 << ' ' << GRID_SIZE / 2 << ' ' << -1 << ' ' << -1 << endl;
+        cout << rand() % GRID_SIZE << ' ' <<  rand() % GRID_SIZE << ' ' << -1 << ' ' << -1 << endl;
         return 0;
     }
 
+    if (turnID == 57) {
+        int x1 = -1, y1 = -1, x2 = -1, y2 = -1;
+        for (int i = 0; i < GRID_SIZE; i++) {
+            for (int j = 0; j < GRID_SIZE; j++) {
+                int color = main_game->cur_Board->map[i][j];
+                if (color != GRID_SELF && color != GRID_OPPO) {
+                    if (x1 == -1) {
+                        x1 = i; y1 = j;
+                    }
+                    else {
+                        x2 = i; y2 = j;
+                    }
+                }
+
+            }
+        }
+        cout << x1 << ' ' << y1 << ' ' << x2 << ' ' << y2 << endl;
+        return 0;
+    }
     /************************************************************************************/
     /***在下面填充你的代码，决策结果（本方将落子的位置）存入startX、startY、resultX、resultY中*****/
     // 下面仅为随机策略的示例代码，且效率低，可删除
