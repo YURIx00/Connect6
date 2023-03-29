@@ -22,9 +22,16 @@
 using namespace std;
 const int mov[8][2] = { {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, -1} };
 
-const int SelfValue[7] = { 0, 1,  20, 40, 200,  200,  1000000 };
-const int OppoValue[7] = { 0, 1,  25, 50, 6000, 6000, 1000000 };
-const int MaxAction_1[MAX_DEPTH + 1] = { 25,40,60,100,200,300,300,300,300, };
+//const int SelfValue[7] = { 0, 1,  20, 40, 200,  200,  1000000 };
+//const int OppoValue[7] = { 0, 1,  25, 50, 6000, 6000, 1000000 };
+const int MaxAction_1[MAX_DEPTH + 1] = { 25,40,60,60,200,300,300,300,300, };
+
+const int self_act_value[2][7] = { {1,20,40,200,200,1000000,1000000},
+                                      {0,1,20,40,200,200,1000000} };
+
+const int oppo_act_value[2][7] = { {1,  25, 50, 6000, 6000, 1000000,1000000},
+                                      {0, 1,  25, 50, 6000, 6000, 1000000} };
+
 class Board
 {
 public:
@@ -130,7 +137,7 @@ public:
     }
 
     //计算以（x,y）为源点，向direction方向延申 6-1格 的路 的value
-    pair<double, double> get_Road_Value(Board* state) const
+    pair<double, double> get_Road_Value(Board* state,int step) const
     {
         int x = road_x, y = road_y;
         int max_dist = N_TO_WIN;
@@ -155,7 +162,7 @@ public:
             if (self_cnt > 0 && oppo_cnt > 0)return { 0,0 };//此路含有双方棋子，已无价值
         }
         //  if (self_cnt == max_dist)cout << "win";
-        return{ SelfValue[self_cnt], OppoValue[oppo_cnt] };
+        return{ self_act_value[step][self_cnt], oppo_act_value[step][oppo_cnt] };
     }
 
     //提供set排列标准，随意设置，set主要用于去重
@@ -196,9 +203,6 @@ public:
     // 判断节点是否被拓展满
     bool is_full_expand()
     {
-        /* set<int>* legal_actions = state->get_legal_actions();
-         int act_size = (int)legal_actions->size();
-         return act_size*(act_size-1)/2 <= (int)children.size();*/
         return been_expand;
     }
 
@@ -246,7 +250,7 @@ public:
             }
         }
         for (auto& road : road_changed) {
-            road_valu = road.get_Road_Value(state);
+            road_valu = road.get_Road_Value(state,1);
             self_total_value += road_valu.first;
             oppo_total_threat += road_valu.second;
         }
@@ -305,141 +309,7 @@ public:
             return false;
     }
 
-    // 判断对局是否结束
-    int is_end(Board* state)
-    { // Return the winner of game
-        // 横排六子
-        for (int i = 0; i < GRID_SIZE; i++)
-        {
-            int count = 0;
-            int prev_color = 0;
-            for (int j = 0; j < GRID_SIZE; j++)
-            {
-                // cout << "[" << i << "," << j << "] ";
-                int cur_color = state->map[i][j];
-                if (cur_color != 0 && cur_color == prev_color)
-                {
-                    count++;
-                    if (count >= N_TO_WIN)
-                        return cur_color;
-                }
-                else
-                {
-                    count = 1;
-                    prev_color = cur_color;
-                }
-            }
-            // cout << endl;
-        }
-
-        // 竖排六子
-        for (int j = 0; j < GRID_SIZE; j++)
-        {
-            int count = 0;
-            int prev_color = 0;
-            for (int i = 0; i < GRID_SIZE; i++)
-            {
-                // cout << "[" << i << "," << j << "] ";
-                int cur_color = state->map[i][j];
-                if (cur_color != 0 && cur_color == prev_color)
-                {
-                    count++;
-                    if (count >= N_TO_WIN)
-                        return cur_color;
-                }
-                else
-                {
-                    count = 1;
-                    prev_color = cur_color;
-                }
-            }
-            // cout << endl;
-        }
-
-        // 右斜六子上 左斜六子下
-        for (int layer = 0; layer < GRID_SIZE; layer++)
-        {
-            int count = 0;
-            int prev_color = 0;
-            for (int k = 0; k < layer + 1; k++)
-            {
-                cout << "[" << layer - k << "," << k << "] ";
-                int cur_color = state->map[layer - k][k];
-                if (cur_color != 0 && cur_color == prev_color)
-                {
-                    count++;
-                    if (count >= N_TO_WIN)
-                        return cur_color;
-                }
-                else
-                {
-                    count = 1;
-                    prev_color = cur_color;
-                }
-            }
-            // cout << "*" << endl;
-            for (int k = 0; k < GRID_SIZE - layer; k++)
-            {
-                // cout << "[" << layer + k << "," << k << "] ";
-                int cur_color = state->map[layer + k][k];
-                if (cur_color != 0 && cur_color == prev_color)
-                {
-                    count++;
-                    if (count >= N_TO_WIN)
-                        return cur_color;
-                }
-                else
-                {
-                    count = 1;
-                    prev_color = cur_color;
-                }
-            }
-            // cout << endl;
-        }
-
-        // 右斜六子下 左斜六子上
-        for (int layer = 1; layer < GRID_SIZE; layer++)
-        {
-            int count = 0;
-            int prev_color = 0;
-            for (int k = 0; k < GRID_SIZE - layer; k++)
-            {
-                // cout << "[" << GRID_SIZE - k - 1 << "," << layer + k << "] ";
-                int cur_color = state->map[GRID_SIZE - k - 1][layer + k];
-                if (cur_color != 0 && cur_color == prev_color)
-                {
-                    count++;
-                    if (count >= N_TO_WIN)
-                        return cur_color;
-                }
-                else
-                {
-                    count = 1;
-                    prev_color = cur_color;
-                }
-            }
-            // cout << "&" << endl;
-            for (int k = 0; k < GRID_SIZE - layer; k++)
-            { // k: [7 -> 1]
-                int cur_color = state->map[k][layer + k];
-                // cout << "[" << k << "," << layer + k << "] ";
-                if (cur_color != 0 && cur_color == prev_color)
-                {
-                    count++;
-                    if (count >= N_TO_WIN)
-                        return cur_color;
-                }
-                else
-                {
-                    count = 1;
-                    prev_color = cur_color;
-                }
-            }
-            // cout << endl;
-        }
-
-        return GRID_BLANK;
-    }
+    
 
     // 根据一步棋判断对局是否结束
     int is_end(Board* state, int move)
@@ -567,11 +437,13 @@ public:
 
 class Action {
 public:
-    int x, y;
-    double w;
     Board* state;
+    int x, y;
     int color;
-    Action(Board* state_, int x_, int y_, int color_) :x(x_), y(y_), state(state_), color(color_) {
+    int step;
+    double w;
+
+    Action(Board* state_, int x_, int y_, int color_, int step_) :state(state_), x(x_), y(y_), color(color_), step(step_) {
         w = get_Action_value();
     }
     //得到该步棋的价值
@@ -585,7 +457,7 @@ public:
         for (int i = 0; i < 4; i++) { // 方向
             for (int dist = 0; dist < max_dist; dist++) { // 距离
                 Road* tmp_road = new Road(x + dist * mov[i][0], y + dist * mov[i][1], i + 4); // i+4使路的方向与寻找路的源点的方向反向
-                road_valu = tmp_road->get_Road_Value(state);
+                road_valu = tmp_road->get_Road_Value(state, step);
                 self_total_value += road_valu.first;
                 oppo_total_threat += road_valu.second;
             }
@@ -702,43 +574,44 @@ public:
 
         int maxSize_Action_1 = MaxAction_1[node->depth];
         set<int>* node_legal_actions = node->state->get_legal_actions(); // 该节点的合法落子集合
-        set<pair<int, int> > act_made;
-        set<Action> legal_actions;
+        set<Action> legal_actions1;
 
 
         for (auto tmp : *node_legal_actions)//拷贝防止修改原节点
         {
-            legal_actions.insert({ node->state,tmp / GRID_SIZE,tmp % GRID_SIZE,-node->color }); // tmp为int i*GRID_SIZE+j
+            legal_actions1.insert({ node->state,tmp / GRID_SIZE,tmp % GRID_SIZE,-node->color,0 }); // tmp为int i*GRID_SIZE+j
         }
 
         // 若无处落子则返回父节点
-        if (legal_actions.empty())  return;
-        // 记录兄弟节点已有的落子
-        for (auto child : node->children)
-        {
-            int act1 = child->action_1, act2 = child->action_2;//保证顺序
-            act_made.insert({ min(act1,act2),max(act1,act2) });
-        }
+        if (legal_actions1.empty())  return;
+        
 
-        set<Action>::iterator it1 = legal_actions.begin();
-        /* for (; it1 != legal_actions.end(); it1++) {
-             cout << it1->w << endl;
-         }*/
-        it1 = legal_actions.begin();
-        for (int i = 0; i <= maxSize_Action_1 && it1 != legal_actions.end(); i++, it1++) {//选取前若干个作为action_1
-            set<Action>::iterator it2 = legal_actions.begin();
-            //         修改棋盘
-            for (int j = 0; j <= maxSize_Action_1 * 5 && it2 != legal_actions.end(); j++, it2++) {
+        set<Action>::iterator it1 = legal_actions1.begin();
+        for (int i = 0; i <= maxSize_Action_1 && it1 != legal_actions1.end(); i++, it1++) {//选取前若干个作为action_1
+
+
+            // 修改棋盘
+            int tmp_color = node->state->map[it1->x][it1->y];
+            node->state->map[it1->x][it1->y] = it1->color;
+
+            set<Action>legal_actions2;
+            for (auto act_need_change : legal_actions1) {
+                legal_actions2.insert({ node->state, act_need_change.x, act_need_change.y, -node->color, 1 });
+            }
+                set<Action>::iterator it2 = legal_actions2.begin();
+
+            for (int j = 0; j <= maxSize_Action_1 * 5 && it2 != legal_actions2.end(); j++, it2++) {
                 Action act_2 = *it2;
                 int act1 = it1->x * GRID_SIZE + it1->y;
                 int act2 = act_2.x * GRID_SIZE + act_2.y;
-                if ((it1->x != act_2.x || it1->y != act_2.y) && act_made.count({ min(act1,act2),max(act1,act2) }) == 0) {
+                if ((it1->x != act_2.x || it1->y != act_2.y)) {
                     //选择这两个节点扩展
                     set<int>* tmp_actions = new set<int>;
-                    for (auto& action : legal_actions) {//拷贝
+                    for (auto& action : legal_actions2) {//拷贝获取棋盘合法落子
                         tmp_actions->insert(action.x * GRID_SIZE + action.y);
                     }
                     Board* new_state = new Board(node->state, tmp_actions);
+                    //这里应该先回复action_1之前的棋盘，但由make_move函数定义，结果不影响
                     new_state->make_move(act1, -node->color); // 选择的两步构成了新节点
                     new_state->make_move(act2, -node->color);
 
@@ -754,12 +627,12 @@ public:
                 for (int j = -DISTANCE; j <= DISTANCE; j++)
                 {
                     int ex = it1->x + i, ey = it1->y + j;
-                    if (ex >= 0 && ex < GRID_SIZE && ey >= 0 && ey < GRID_SIZE && node->state->map[ex][ey] == GRID_BLANK) {
+                    if (ex >= 0 && ex < GRID_SIZE && ey >= 0 && ey < GRID_SIZE &&( node->state->map[ex][ey] == SURROUND_MARK|| node->state->map[ex][ey]==GRID_BLANK)) {
 
                         if ((it1->x != ex || it1->y != ey)) {
                             //选择这两个节点扩展
                             set<int>* tmp_actions = new set<int>;
-                            for (auto& action : legal_actions) {//拷贝
+                            for (auto& action : legal_actions1) {//拷贝
                                 tmp_actions->insert(action.x * GRID_SIZE + action.y);
                             }
                             int act1 = it1->x * GRID_SIZE + it1->y;
@@ -775,8 +648,8 @@ public:
                     }
                 }
             }
+            node->state->map[it1->x][it1->y] = tmp_color;
 
-            //    if (node->children.size() > maxSize_Action_1 * maxSize_Action_1)break;
         }
         sort(node->children.begin(), node->children.end(), cmp_TreeNode);
         /*  for (int i = 0; i < node->children.size(); i++) {
@@ -822,7 +695,7 @@ public:
         {
             node->visits++;                 // 节点的被访问次数+1
             node->reward += reward;         // 节点的奖励点更新
-            node->diff_value += diff_value / (double)node->depth; // 节点的获得路价值更新
+            node->diff_value += diff_value / (double)pow(node->depth,3); // 节点的获得路价值更新
             if (node->parent && node->max_depth > node->parent->max_depth)
                 node->parent->max_depth = node->max_depth; // 节点最大深度（用于调试）
             node = node->parent;            // 向上遍历
@@ -883,7 +756,7 @@ int main()
     // 先手特判
     if (turnID == 1 && 1 == firstself)
     {
-        cout << rand() % GRID_SIZE << ' ' <<  rand() % GRID_SIZE << ' ' << -1 << ' ' << -1 << endl;
+        cout << rand() % GRID_SIZE << ' ' << rand() % GRID_SIZE << ' ' << -1 << ' ' << -1 << endl;
         return 0;
     }
 
