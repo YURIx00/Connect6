@@ -24,9 +24,9 @@ const int mov[8][2] = { {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -
 
 //const int SelfValue[7] = { 0, 1,  20, 40, 200,  200,  1000000 };
 //const int OppoValue[7] = { 0, 1,  25, 50, 6000, 6000, 1000000 };
-const int MaxAction_1[MAX_DEPTH + 1] = { 25,40,60,60,200,300,300,300,300, };
+const int MaxAction_1[MAX_DEPTH + 1] = { 25,30,35,43,50,58,66,70,73,80,90 };
 
-const int self_act_value[2][7] = { {1,20,40,200,200,1000000,1000000},
+const int self_act_value[2][7] = { {1,20,40,200,500,1000500,1000500},
                                       {0,1,20,40,200,200,1000000} };
 
 const int oppo_act_value[2][7] = { {1,  25, 50, 6000, 6000, 1000000,1000000},
@@ -143,9 +143,14 @@ public:
         int max_dist = N_TO_WIN;
         if (!is_legalRoad())//此路不存在
             return { 0,0 };
-        //if (x == 7 && y == 9) {
-        //    cout << endl;
+
+
+        //if (x == 8 && y == 1) {
+        //    x++; x--;
+        //    cout<<direction<<' '<<step<<endl;
         //};//调试用
+
+
         int self_cnt = 0, oppo_cnt = 0;
         //没有加0
         x -= mov[direction][0];
@@ -450,8 +455,8 @@ public:
     double get_state_value() {
         int max_dist = N_TO_WIN;
         double self_total_value = 0, oppo_total_threat = 0;
-        //if (x == 7 && y == 9) {
-        //    cout << endl;
+        //if (x == 8 && y == 1) {
+        //    x++; x--;
         //};//调试用断点
         pair<double, double> road_valu;
         for (int i = 0; i < 4; i++) { // 方向
@@ -469,8 +474,8 @@ public:
         double pre_value = 0, now_value = 0;
         pre_value += get_state_value();
         //走子
-        //if (x == 7 && y == 9) {
-        //    cout << endl;
+        //if (x == 8 && y == 1) {
+        //    x++; x--;
         //};//调试用断点
         int tmp_color = state->map[x][y];
         state->map[x][y] = color;
@@ -514,7 +519,9 @@ public:
             clock_t end = clock(); // 结束时间
             if (end - start >= TIME_TO_SIMULATE) break;
         }
-        best_child = select(root);                             // 从树中选择最佳子节点（最佳选择）
+        best_child = select_result(root);                             // 从树中选择最佳子节点（最佳选择）
+
+
         return { best_child->action_1, best_child->action_2 }; // 返回最佳选择下的两步棋
     }
 
@@ -533,6 +540,39 @@ public:
         }
         return node;                     // 返回结果
     }
+    // 从该节点选择最佳子节点作为最终结果
+    TreeNode* select_result(TreeNode* node)
+    {
+        double max_ucb = -INF;              // 最大UCB
+        vector<TreeNode*> select_children;  // 最佳子节点的集合
+
+        for (auto child : node->children)
+        {
+            /*if (child->action_1 == 52 && child->action_2 == 83) {
+                int t = child->action_1;
+            }*///调试断点
+            // UCB计算公式
+            double ucb = ((double)child->reward) / (double)child->visits + c * sqrt(2.0 * log((double)node->visits) / (double)child->visits)
+                + child->diff_value / child->depth;
+
+            if (ucb == max_ucb)
+            { // 该节点的UCB和最大UCB一致，则加入集合
+                select_children.push_back(child);
+            }
+            else if (ucb > max_ucb)
+            { // 该节点的UCB更大，更新最大UCB，清空select_children
+                select_children = { child };
+                max_ucb = ucb;
+            }
+        }
+
+        int n = (int)select_children.size();
+        if (n == 0)
+            return node->parent; // 若无最佳节点，则将父节点返回
+
+        return select_children[rand() % n]; // 从最佳子节点集合随机选择一个
+    }
+
 
     // 从该节点选择最佳子节点
     TreeNode* select(TreeNode* node)
@@ -542,6 +582,9 @@ public:
 
         for (auto child : node->children)
         {
+            /*if(child->action_1 == 52 && child->action_2 == 83) {
+                int t = child->action_1;
+            }*/
             if (child->visits == 0)
             { // 未被访问的子节点直接选中
                 return child;
@@ -549,6 +592,10 @@ public:
             // UCB计算公式
             double ucb = ((double)child->reward) / (double)child->visits + c * sqrt(2.0 * log((double)node->visits) / (double)child->visits)
                 + child->diff_value / child->depth;
+          /*  if (child->action_1 == 121 && child->action_2 == 135) {
+                int t = child->action_1;
+            }*/
+            
             if (ucb == max_ucb)
             { // 该节点的UCB和最大UCB一致，则加入集合
                 select_children.push_back(child);
@@ -695,7 +742,7 @@ public:
         {
             node->visits++;                 // 节点的被访问次数+1
             node->reward += reward;         // 节点的奖励点更新
-            node->diff_value += diff_value / (double)pow(node->depth,3); // 节点的获得路价值更新
+            node->diff_value += diff_value / (double)pow(node->depth,2); // 节点的获得路价值更新
             if (node->parent && node->max_depth > node->parent->max_depth)
                 node->parent->max_depth = node->max_depth; // 节点最大深度（用于调试）
             node = node->parent;            // 向上遍历
@@ -756,7 +803,7 @@ int main()
     // 先手特判
     if (turnID == 1 && 1 == firstself)
     {
-        cout << rand() % GRID_SIZE << ' ' << rand() % GRID_SIZE << ' ' << -1 << ' ' << -1 << endl;
+        cout << rand() % GRID_SIZE/2+ GRID_SIZE/4 << ' ' << rand() % GRID_SIZE / 2 + GRID_SIZE / 4 << ' ' << -1 << ' ' << -1 << endl;
         return 0;
     }
 
